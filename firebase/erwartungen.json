@@ -1,0 +1,11 @@
+[
+  {"pfad": "voltage", "lesen": "nie", "schreiben": "nie"},
+  {"pfad": "voltage/spiele", "lesen": "nie", "schreiben": "nie"},
+  {"pfad": "voltage/spiele/K7Q2XM", "lesen": "bedingt", "schreiben": "bedingt"},
+  {"pfad": "voltage/spiele/K7Q2XM/spiel", "lesen": "bedingt", "schreiben": "bedingt"},
+  {"pfad": "voltage/spiele/K7Q2XM/resultate/r1", "lesen": "bedingt", "schreiben": "bedingt"},
+  {"pfad": "voltage/lehrer", "lesen": "nie", "schreiben": "nie"},
+  {"pfad": "voltage/lehrer/K7Q2XM", "lesen": "nie", "schreiben": "nie"},
+  {"pfad": "voltage/lehrer/K7Q2XM/0123456789abcdef", "lesen": "immer", "schreiben": "bedingt"},
+  {"pfad": "anderes", "lesen": "nie", "schreiben": "nie"}
+]

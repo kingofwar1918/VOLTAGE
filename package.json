@@ -1,0 +1,11 @@
+{
+  "name": "voltage-planspiel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Voltage – Planspiel für den WAH-Unterricht: Gruppen führen eine Energy-Drink-Firma wirtschaftlich, ökologisch und sozial.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/",
+    "start": "npx --yes serve -l 8080 ."
+  }
+}
