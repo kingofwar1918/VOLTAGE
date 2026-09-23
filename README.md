@@ -147,5 +147,6 @@ FIREBASE_EMULATOR_JAR=/pfad/firebase-database-emulator.jar npm test   # zusätzl
 
 - `spielmodell.test.mjs` prüft das Marktmodell: Kassenrechnung, Grenzen, unsinnige Eingaben, Ereignisse, Autopilot und Spielbalance.
 - `e2e-lokal.test.mjs` spielt ein ganzes Spiel im Browser durch: Gründung, Start-Check, fünf Levels, Zurücknehmen, Reflexion, Transfer, Export und Neuladen.
+- `e2e-befunde.test.mjs` sichert behobene Fehler ab: Entwürfe gegenüber neueren Abgaben, manipulierte Resultate, Sicherung in ein anderes Spiel, Sitzungen pro Tab, Kündigungen in der Planungshilfe, fremde Datenbank-Links, Ereignisse, offene Abschnitte und Reflexionsentwürfe.
 - `regeln.test.mjs` und `e2e-online.test.mjs` laufen gegen den offiziellen Firebase-Emulator mit den echten Regeln. Getestet werden drei Geräte, ein Netzausfall mit Nachliefern, eine verspätete Abgabe, ein zweites Gerät der Lehrperson und das Löschen.
 - `qr.test.mjs` liest die QR-Codes der App mit einem unabhängigen Leser (`npm install --no-save jsqr`).

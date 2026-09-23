@@ -69,7 +69,7 @@ test("Online-Modus mit drei Geräten", { skip: ohne, timeout: 240000 }, async ()
     await g.click('form[data-form="gruenden"] button[type=submit]');
     await g.locator(".leiste .kontext", { hasText: name }).waitFor();
   }
-  await lehrer.locator("text=2 Gruppen").waitFor({ timeout: 15000 });
+  await lehrer.getByText("2 Gruppen · 2 Computer").waitFor({ timeout: 15000 });
 
   // Quartal 1: beide geben ab, Lehrperson sieht es live
   await lehrer.click('[data-act="rundeOeffnen"]');

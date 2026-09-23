@@ -177,8 +177,9 @@ hr{border:none; border-top:1px solid var(--line); margin:4px 0}
 .chip.neu{background:var(--magenta); border-color:var(--magenta); color:#fff}
 .chip.ki{background:var(--sunk)}
 .farbe{width:22px; height:22px; border-radius:6px; display:inline-block; vertical-align:middle; border:2px solid var(--halo); flex:0 0 auto}
-.firma{display:inline-flex; align-items:center; gap:8px; font-weight:700; min-width:0}
-.firma .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.firma{display:inline-flex; align-items:center; gap:8px; font-weight:700; min-width:0; max-width:100%; vertical-align:middle}
+.firma .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.banner>span{min-width:0; overflow-wrap:anywhere}
 
 /* Phasen-Leiste: Einstieg – Level 1–5 – Transfer */
 .phasen{display:flex; gap:4px; overflow-x:auto; padding-bottom:4px}
@@ -787,10 +788,18 @@ function gueltigeDbUrl(u) {
   return /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.(firebaseio\.com|firebasedatabase\.app)\/?$/i.test(u.trim()) ||
     /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/[a-z0-9_-]+)*\/?$/i.test(u.trim());
 }
+// Reihenfolge: fest eingetragen → Link dieses Tabs (?db=) → auf dem Gerät gespeichert
 function onlineAdresse() {
-  const aus = [KONFIG.firebaseUrl, Lokal.lies("voltage:firebaseUrl", "")];
-  for (const u of aus) if (gueltigeDbUrl(u)) return u.trim().replace(/\/+$/, "");
+  const aus = [KONFIG.firebaseUrl, Sitzungsspeicher.lies("voltage:dbLink", ""), Lokal.lies("voltage:firebaseUrl", "")];
+  for (const u of aus) if (gueltigeDbUrl(u)) return String(u).trim().replace(/\/+$/, "");
   return "";
+}
+// Jede Sitzung merkt sich ihre Datenbank – ein späterer Link ändert sie nicht
+function datenbankFuer(modus, db) {
+  if (modus !== "online") return null;
+  const url = gueltigeDbUrl(db) ? String(db).trim().replace(/\/+$/, "") : onlineAdresse();
+  FirebaseDB.basis = url;
+  return url;
 }
 function store(modus) { return (modus || (App.sitzung && App.sitzung.modus)) === "online" ? FirebaseDB : LokalDB; }
 
@@ -818,6 +827,7 @@ function fr(n) { return fmt(n) + " Fr."; }
 function preis(n) { return num(n).toFixed(2) + " Fr."; }
 function vorz(n) { const v = Math.round(num(n)); return (v > 0 ? "+" : "") + fmt(v); }
 function prozent(n) { return Math.round(num(n)) + "%"; }
+function personenText(n) { return `${fmt(n)} ${Math.round(num(n)) === 1 ? "Person" : "Personen"}`; }
 function zufallsText(n, alphabet) {
   const a = alphabet || "abcdefghijkmnpqrstuvwxyz23456789";
   const out = [];
@@ -840,6 +850,8 @@ function hashText(s) {
   return (h1 >>> 0).toString(16).padStart(8, "0") + (h2 >>> 0).toString(16).padStart(8, "0");
 }
 function pinHash(code, pin) { return hashText("voltage|" + code + "|" + String(pin).trim()); }
+// Gruppen-PINs hängen am ursprünglichen Spielcode (wichtig nach dem Einspielen einer Sicherung)
+function gruppenPinCode(spiel, code) { return (spiel && spiel.pinCode) || code; }
 function uhrzeit(t) { try { return new Date(t).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } }
 function datumZeit(t) { try { return new Date(t).toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } }
 function warte(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -1073,7 +1085,7 @@ const QR = (() => {
 const Engine = (() => {
   const R = () => DATEN.regeln;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const zahl = (v, std) => { const n = Number(v); return Number.isFinite(n) ? n : std; };
+  const zahl = (v, std) => { if (v === null || v === "" || typeof v === "boolean") return std; const n = Number(v); return Number.isFinite(n) ? n : std; };
   const r1 = (v) => Math.round(v * 10) / 10;
   const r2 = (v) => Math.round(v * 100) / 100;
   const dup = (o) => JSON.parse(JSON.stringify(o));
@@ -1081,7 +1093,7 @@ const Engine = (() => {
   function startZustand(einst) {
     const r = R(), s = r.start;
     return {
-      kasse: zahl(einst && einst.startkapital, r.startkapital),
+      kasse: zahl(einst ? einst.startkapital : undefined, r.startkapital),
       kredit: 0, lager: 0,
       mitarbeitende: s.mitarbeitende, zufriedenheit: s.zufriedenheit, qualitaet: s.qualitaet,
       image: s.image, bekanntheit: s.bekanntheit, umwelt: s.umwelt, gesellschaft: s.gesellschaft,
@@ -1178,6 +1190,15 @@ const Engine = (() => {
     return l;
   }
 
+  // Personal nach Kündigung (Zufriedenheit unter der Schwelle) und gewünschter Änderung
+  function personalPlan(z, wunsch, level) {
+    const r = R();
+    let ma = Math.max(1, Math.round(zahl(z.mitarbeitende, r.start.mitarbeitende))), gekuendigt = 0;
+    if (level >= 3 && z.zufriedenheit < r.fluktuationUnter && ma > 1) { ma -= 1; gekuendigt = 1; }
+    const delta = level >= 3 ? clamp(Math.round(zahl(wunsch, 0)), -(ma - 1), r.personalMaxPlus) : 0;
+    return { basis: ma, delta, mitarbeitende: ma + delta, eingestellt: Math.max(0, delta), entlassen: Math.max(0, -delta), gekuendigt };
+  }
+
   function kapazitaetVon(z, fx) {
     const r = R();
     const produktivitaet = 0.88 + 0.2 * z.zufriedenheit / 100;
@@ -1229,14 +1250,10 @@ const Engine = (() => {
       const roh = entscheide[f.id];
       const abgegeben = !!(roh && roh.zeit);
       const d = normalisiere(abgegeben ? roh : autopilot(z), level, z);
-      let eingestellt = 0, entlassen = 0, gekuendigt = 0;
-      if (level >= 3) {
-        if (z.zufriedenheit < r.fluktuationUnter && z.mitarbeitende > 1) { z.mitarbeitende -= 1; gekuendigt = 1; }
-        const delta = clamp(d.personal, -(z.mitarbeitende - 1), r.personalMaxPlus);
-        d.personal = delta;
-        if (delta > 0) eingestellt = delta; else entlassen = -delta;
-        z.mitarbeitende += delta;
-      }
+      const pp = personalPlan(z, d.personal, level);
+      const { eingestellt, entlassen, gekuendigt } = pp;
+      d.personal = pp.delta;
+      z.mitarbeitende = pp.mitarbeitende;
       let investition = 0;
       if (d.investAnlage) { investition += r.investitionen.anlage.preis; z.anlageKauf = r.investitionen.anlage.preis; z.anlage = z.anlageKauf; }
       if (d.investSolar) { investition += r.investitionen.solar.preis; z.solarKauf = r.investitionen.solar.preis; z.solar = z.solarKauf; }
@@ -1366,7 +1383,7 @@ const Engine = (() => {
       prognoseFaktor: saison.faktor * fx.nachfrage, marktpotenzial: Math.round(markt), firmen: res };
   }
 
-  return { startZustand, zustandVon, saisonVon, effekte, prognose, normalisiere, autopilot, kapazitaetVon, stueckkostenVon,
+  return { startZustand, zustandVon, saisonVon, effekte, prognose, normalisiere, autopilot, personalPlan, kapazitaetVon, stueckkostenVon,
     bekanntheitNach, simuliere, eigenkapital, gesamtPunkte, punkteVon };
 })();
 /*</ENGINE>*/
@@ -1415,14 +1432,15 @@ const KI = {
 const STATUS = ["vorbereitung", "offen", "auswertung", "ausgewertet", "beendet"];
 const App = {
   bildschirm: "start",
-  sitzung: { rolle: null, code: null, fid: null, modus: "lokal", alsFirma: null },
+  sitzung: { rolle: null, code: null, fid: null, modus: "lokal", alsFirma: null, db: null },
   spiel: null, firmen: {}, resultate: {}, entscheide: {}, eigenerEntscheid: undefined, reflexion: {},
   version: null, zaehler: 0, offline: false,
   tabL: "cockpit", tabG: "zentrale", berichtRunde: null, ergebnisRunde: null,
-  entwurf: {},
+  entwurf: {}, entwurfErsetzt: null,
   beitritt: null,
   renderWartet: false, signatur: "",
-  quiz: null
+  quiz: null,
+  aufgeklappt: {}, reflexionUhren: {}
 };
 
 function spielNormal(s) {
@@ -1445,6 +1463,7 @@ function spielNormal(s) {
     ereignisse: liste(s.ereignisse).filter((k) => DATEN.ereignisse[k]).slice(0, 2),
     verlauf,
     demo: s.demo === true,
+    pinCode: typeof s.pinCode === "string" && /^[A-HJ-NP-Z2-9]{6}$/.test(s.pinCode) ? s.pinCode : null,
     einstellungen: {
       startkapital: klemme(num(e.startkapital, DATEN.regeln.startkapital), 50000, 1000000),
       rundenProLevel: klemme(Math.round(num(e.rundenProLevel, 2)), 1, 4),
@@ -1459,7 +1478,7 @@ function spielNormal(s) {
 function spielDaten(s, aenderung) {
   const o = {
     name: s.name, code: s.code, erstellt: s.erstellt, version: s.version, status: s.status, runde: s.runde, level: s.level,
-    ereignisse: s.ereignisse, verlauf: s.verlauf, demo: s.demo || null, einstellungen: s.einstellungen
+    ereignisse: s.ereignisse, verlauf: s.verlauf, demo: s.demo || null, pinCode: s.pinCode || null, einstellungen: s.einstellungen
   };
   return Object.assign(o, aenderung || {});
 }
@@ -1477,14 +1496,66 @@ function firmenNormal(roh) {
   }
   return out;
 }
+/* Resultate aus der Datenbank neu aufbauen: nur Zahlen, bekannte Texte und
+   bekannte Schlüssel. Im Online-Modus kann jedes Gerät mit dem Spielcode
+   schreiben – ungeprüfte Werte dürfen nie ins HTML gelangen. */
+const ZAHLEN_RESULTAT = ["kapazitaet", "produziert", "lagerAlt", "verfuegbar", "nachfrage", "verkauft", "zusatz", "fehlmenge", "lagerNeu", "restposten",
+  "stueckkosten", "umsatz", "umsatzVerkauf", "umsatzRest", "kostenTotal", "gewinn", "kasseAlt", "investition", "notkredit", "eingestellt", "entlassen",
+  "gekuendigt", "attraktivitaet", "marktanteil"];
+const ZAHLEN_KOSTEN = ["herstellung", "personal", "personalwechsel", "weiterbildung", "marketing", "fix", "lager", "lernende", "engagement", "zinsen", "abschreibung"];
+const ZAHLEN_ENTSCHEID = ["menge", "preis", "social", "plakat", "sponsoring", "personal", "weiterbildung", "kreditNeu", "kreditRueck", "lernende", "engagement"];
+function zahlenAus(o, schluessel) {
+  const out = {};
+  for (const k of schluessel) out[k] = num(o && typeof o === "object" ? o[k] : 0);
+  return out;
+}
+function entscheidNormal(d) {
+  const r = DATEN.regeln, o = zahlenAus(d, ZAHLEN_ENTSCHEID);
+  const q = d && typeof d === "object" ? d : {};
+  o.lohn = Object.prototype.hasOwnProperty.call(r.loehne, q.lohn) ? q.lohn : "mittel";
+  o.zutaten = q.zutaten === "bio" ? "bio" : "standard";
+  o.dose = q.dose === "recycling" ? "recycling" : "standard";
+  o.rezeptur = q.rezeptur === "zuckerreduziert" ? "zuckerreduziert" : "normal";
+  o.investAnlage = q.investAnlage === true;
+  o.investSolar = q.investSolar === true;
+  return o;
+}
+function punkteNormal(p) {
+  const o = {};
+  for (const k of ["wirtschaft", "umwelt", "gesellschaft", "gesamt"]) o[k] = klemme(Math.round(num(p && typeof p === "object" ? p[k] : 0)), 0, 100);
+  return o;
+}
+function firmaResultatNormal(x) {
+  const o = zahlenAus(x, ZAHLEN_RESULTAT);
+  o.abgegeben = x.abgegeben === true;
+  o.ausverkauft = x.ausverkauft === true;
+  o.influencer = x.influencer === true;
+  o.jugendschutzMalus = x.jugendschutzMalus === true;
+  o.entscheid = entscheidNormal(x.entscheid);
+  o.kosten = zahlenAus(x.kosten, ZAHLEN_KOSTEN);
+  o.faktoren = zahlenAus(x.faktoren, ["preis", "bekanntheit", "qualitaet", "image", "label"]);
+  o.vorher = zahlenAus(x.vorher, ["bekanntheit", "zufriedenheit", "qualitaet", "image", "umwelt", "gesellschaft"]);
+  o.punkte = punkteNormal(x.punkte);
+  o.punkteAlt = punkteNormal(x.punkteAlt);
+  o.zustand = Engine.zustandVon(x.zustand, null);
+  if (o.zustand.letzter) o.zustand.letzter = entscheidNormal(o.zustand.letzter);
+  return o;
+}
 function resultateNormal(roh) {
   const out = {};
   if (!roh || typeof roh !== "object") return out;
   for (const [k, v] of Object.entries(roh)) {
-    if (!/^r\d+$/.test(k) || !v || typeof v !== "object" || !v.firmen || typeof v.firmen !== "object") continue;
-    v.runde = num(v.runde, num(k.slice(1)));
-    v.ereignisse = liste(v.ereignisse);
-    out[v.runde] = v;
+    if (!/^r\d{1,3}$/.test(k) || !v || typeof v !== "object" || !v.firmen || typeof v.firmen !== "object") continue;
+    const runde = num(k.slice(1));
+    const firmen = {};
+    for (const [fid, x] of Object.entries(v.firmen)) if (/^[a-z0-9]{3,20}$/i.test(fid) && x && typeof x === "object") firmen[fid] = firmaResultatNormal(x);
+    const saisonName = v.saison && typeof v.saison === "object" ? v.saison.name : "";
+    const saison = DATEN.regeln.saisons.find((x) => x.name === saisonName) || { name: "", ic: "", faktor: 1 };
+    out[runde] = {
+      runde, level: klemme(Math.round(num(v.level, 1)), 1, 5), ereignisse: liste(v.ereignisse).filter((e) => DATEN.ereignisse[e]),
+      saison: { name: saison.name, ic: saison.ic, faktor: saison.faktor }, prognoseFaktor: num(v.prognoseFaktor, 1),
+      marktpotenzial: num(v.marktpotenzial), zeit: num(v.zeit), firmen
+    };
   }
   return out;
 }
@@ -1556,16 +1627,37 @@ function hatVerlustSerieVor(fid, runde) {
 /* =========================================================================
    8. SITZUNG & ABGLEICH
    ========================================================================= */
-function sitzungSpeichern() {
+function sitzungSpeichern(info) {
   const s = App.sitzung;
-  if (s.rolle === "gruppe") { Lokal.schreib("voltage:sitzung", { rolle: "gruppe", code: s.code, fid: s.fid, modus: s.modus }); Sitzungsspeicher.loesche("voltage:sitzungL"); }
-  else if (s.rolle === "lehrer") { Sitzungsspeicher.schreib("voltage:sitzungL", { rolle: "lehrer", code: s.code, modus: s.modus, alsFirma: s.alsFirma || null }); }
+  if (s.rolle === "gruppe") {
+    const eintrag = { rolle: "gruppe", code: s.code, fid: s.fid, modus: s.modus, db: s.db || null };
+    Sitzungsspeicher.schreib("voltage:sitzungG", eintrag);
+    const f = App.firmen[s.fid] || (App.beitritt && App.beitritt.firmen && App.beitritt.firmen[s.fid]) || info;
+    Lokal.schreib("voltage:sitzung", Object.assign({}, eintrag, f ? { name: text(f.name, 24), logo: text(f.logo, 8) } : {}));
+    Sitzungsspeicher.loesche("voltage:sitzungL");
+  } else if (s.rolle === "lehrer") {
+    Sitzungsspeicher.schreib("voltage:sitzungL", { rolle: "lehrer", code: s.code, modus: s.modus, alsFirma: s.alsFirma || null, db: s.db || null });
+    Sitzungsspeicher.loesche("voltage:sitzungG");
+  }
+}
+// Zuletzt auf diesem Gerät angemeldete Gruppe (für «Weiter als …»)
+function letzteGruppe() {
+  const l = Lokal.lies("voltage:sitzung", null);
+  if (!l || typeof l !== "object" || !/^[A-Z0-9]{6,12}$/.test(String(l.code || "")) || !/^[a-z0-9]{3,20}$/i.test(String(l.fid || ""))) return null;
+  if (l.modus === "online" && !gueltigeDbUrl(l.db) && !onlineAdresse()) return null;
+  return { code: l.code, fid: l.fid, modus: l.modus === "online" ? "online" : "lokal", db: gueltigeDbUrl(l.db) ? l.db : null, name: text(l.name, 24), logo: text(l.logo, 8) };
+}
+function weiterAlsKarte(nurCode) {
+  const l = letzteGruppe();
+  if (!l || (nurCode && l.code !== nurCode)) return "";
+  return `<section class="karte hervor zwischen"><span>Zuletzt auf diesem Gerät: <b>${esc((l.logo + " " + l.name).trim() || "eure Firma")}</b> <span class="gedaempft klein">(Spiel ${esc(l.code)})</span></span>
+    <div class="zeile"><button class="knopf" data-act="weiterAls"><span>Weiter →</span></button><button class="textknopf" data-act="vergessen">Nicht unsere Firma</button></div></section>`;
 }
 function sitzungBeenden() {
   Abgleich.stop();
-  if (App.sitzung.rolle === "gruppe") Lokal.loesche("voltage:sitzung");
+  if (App.sitzung.rolle === "gruppe") { Lokal.loesche("voltage:sitzung"); Sitzungsspeicher.loesche("voltage:sitzungG"); }
   if (App.sitzung.rolle === "lehrer") Sitzungsspeicher.loesche("voltage:sitzungL");
-  App.sitzung = { rolle: null, code: null, fid: null, modus: "lokal", alsFirma: null };
+  App.sitzung = { rolle: null, code: null, fid: null, modus: "lokal", alsFirma: null, db: null };
   App.spiel = null; App.firmen = {}; App.resultate = {}; App.entscheide = {}; App.eigenerEntscheid = undefined; App.reflexion = {};
   App.version = null; App.signatur = ""; App.berichtRunde = null; App.ergebnisRunde = null; App.quiz = null;
   App.entwurf.runde = null;
@@ -1579,7 +1671,7 @@ function meineSpieleMerken(eintrag) {
 function meineSpieleEntfernen(code) { Lokal.schreib("voltage:meineSpiele", meineSpiele().filter((x) => x.code !== code)); }
 
 const Abgleich = {
-  uhr: null, laeuft: false,
+  uhr: null, laeuft: null,
   start() {
     this.stop();
     const ms = App.sitzung.modus === "online" ? KONFIG.taktMs : KONFIG.taktLokalMs;
@@ -1587,13 +1679,18 @@ const Abgleich = {
     return this.tick(true);
   },
   stop() { if (this.uhr) clearInterval(this.uhr); this.uhr = null; },
+  // Ein erzwungener Abgleich wartet einen laufenden ab und lädt danach frisch –
+  // so zeigt die Ansicht nach einem Wechsel sicher den aktuellen Stand.
   async tick(erzwingen) {
     if (!App.sitzung.code || (document.hidden && !erzwingen)) return;
-    if (this.laeuft) { if (erzwingen) this.nochmal = true; return; }
-    this.laeuft = true;
-    try { await ladeDaten(erzwingen); } catch (e) { console.error(e); }
-    finally { this.laeuft = false; }
-    if (this.nochmal) { this.nochmal = false; await this.tick(true); }
+    while (this.laeuft) {
+      if (!erzwingen) return;
+      const lauf = this.laeuft;
+      await lauf;
+      if (this.laeuft && this.laeuft !== lauf) { await this.laeuft; return; }
+    }
+    this.laeuft = ladeDaten(erzwingen).catch((e) => console.error(e)).finally(() => { this.laeuft = null; });
+    return this.laeuft;
   }
 };
 document.addEventListener("visibilitychange", () => { if (!document.hidden && App.sitzung.code) Abgleich.tick(true); });
@@ -1621,6 +1718,12 @@ async function ladeDaten(erzwingen) {
   if (!spiel.code) spiel.code = code;
   const neu = erzwingen || !alt || spiel.version !== App.version;
   const rolle = App.sitzung.rolle, fid = aktiveFirmaId();
+  if (alt && rolle === "gruppe") {
+    if (spiel.status === "offen" && (alt.runde !== spiel.runde || alt.status !== "offen") && alt.status !== "auswertung") toast(`🔔 Quartal ${spiel.runde} ist offen – trefft eure Entscheidungen!`, 4500);
+    else if (spiel.status === "ausgewertet" && alt.status !== "ausgewertet") { toast(`📊 Quartal ${spiel.runde} ist ausgewertet – euer Bericht ist da!`, 4500); App.berichtRunde = null; }
+    else if (spiel.status === "beendet" && alt.status !== "beendet") toast("🏁 Das Spiel ist beendet – jetzt kommt die Schlussbilanz.", 4500);
+  }
+  await sendeAusstehende(spiel);   // nach den Hinweisen oben, damit «zu spät» sichtbar bleibt
   if (neu || rolle === "lehrer" || App.zaehler % 4 === 0) {
     const f = await S.lies(`${basis}/firmen`);
     if (f.ok) App.firmen = firmenNormal(f.daten);
@@ -1636,18 +1739,13 @@ async function ladeDaten(erzwingen) {
     if (neu || App.zaehler % 3 === 0) { const rf = await S.lies(`${basis}/reflexion`); if (rf.ok) App.reflexion = rf.daten && typeof rf.daten === "object" ? rf.daten : {}; }
   }
   if (fid) {
-    if (rundeOffen && (neu || !alt || alt.runde !== spiel.runde || App.eigenerEntscheid === undefined)) {
+    if (rundeOffen) {
+      // bei jedem Abgleich: auch Eingaben der Lehrperson oder eines anderen Geräts erscheinen
       const e = await S.lies(`${basis}/entscheide/r${spiel.runde}/${fid}`);
-      if (e.ok) App.eigenerEntscheid = e.daten || null;
-    } else if (!rundeOffen) App.eigenerEntscheid = undefined;
+      if (e.ok) App.eigenerEntscheid = e.daten && typeof e.daten === "object" ? e.daten : null;
+    } else App.eigenerEntscheid = undefined;
     if (rolle === "gruppe" && neu) { const rf = await S.lies(`${basis}/reflexion`); if (rf.ok) App.reflexion = rf.daten && typeof rf.daten === "object" ? rf.daten : {}; }
   }
-  if (alt && rolle === "gruppe") {
-    if (spiel.status === "offen" && (alt.runde !== spiel.runde || alt.status !== "offen") && alt.status !== "auswertung") toast(`🔔 Quartal ${spiel.runde} ist offen – trefft eure Entscheidungen!`, 4500);
-    else if (spiel.status === "ausgewertet" && alt.status !== "ausgewertet") { toast(`📊 Quartal ${spiel.runde} ist ausgewertet – euer Bericht ist da!`, 4500); App.berichtRunde = null; }
-    else if (spiel.status === "beendet" && alt.status !== "beendet") toast("🏁 Das Spiel ist beendet – jetzt kommt die Schlussbilanz.", 4500);
-  }
-  await sendeAusstehende(spiel);   // nach den Hinweisen oben, damit «zu spät» sichtbar bleibt
   App.spiel = spiel;
   App.version = spiel.version;
   zeichneWennNoetig();
@@ -1713,11 +1811,13 @@ function abgabeAusstehend() {
 async function spielSuchen(codeRoh) {
   const code = String(codeRoh || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (code.length < 6) return { fehler: "Der Spielcode hat 6 Zeichen." };
-  const modi = onlineAdresse() ? ["online", "lokal"] : ["lokal"];
+  const db = onlineAdresse();
+  const modi = db ? ["online", "lokal"] : ["lokal"];
   let offline = false;
   for (const m of modi) {
+    if (m === "online") FirebaseDB.basis = db;
     const r = await store(m).lies(`spiele/${code}/spiel`);
-    if (r.ok && r.daten) return { code, modus: m, spiel: spielNormal(r.daten) };
+    if (r.ok && r.daten) return { code, modus: m, db: m === "online" ? db : null, spiel: spielNormal(r.daten) };
     if (!r.ok && m === "online") offline = true;
   }
   return { fehler: offline ? "Keine Verbindung zur Online-Datenbank. Prüft das WLAN und versucht es nochmals." : "Kein Spiel mit diesem Code gefunden. Stimmt der Code?" };
@@ -1725,6 +1825,7 @@ async function spielSuchen(codeRoh) {
 
 async function spielErstellen(werte) {
   const modus = werte.modus === "online" && onlineAdresse() ? "online" : "lokal";
+  const db = datenbankFuer(modus, null);
   const S = store(modus);
   let code = null;
   for (let i = 0; i < 6 && !code; i++) {
@@ -1753,13 +1854,13 @@ async function spielErstellen(werte) {
     const k = DATEN.kiFirmen[i];
     await S.schreib(`spiele/${code}/firmen/${k.id}`, { id: k.id, name: k.name, logo: k.logo, farbe: k.farbe, ki: true, erstellt: jetzt + i });
   }
-  meineSpieleMerken({ code, name: spiel.name, modus, erstellt: jetzt, demo: spiel.demo || undefined });
-  return { code, modus };
+  meineSpieleMerken({ code, name: spiel.name, modus, db, erstellt: jetzt, demo: spiel.demo || undefined });
+  return { code, modus, db };
 }
 
-async function lehrerOeffnen(code, modus, alsFirma) {
+async function lehrerOeffnen(code, modus, alsFirma, db) {
   if (!App.sitzung || App.sitzung.code !== code) App.entwurf.runde = null;
-  App.sitzung = { rolle: "lehrer", code, fid: null, modus, alsFirma: alsFirma || null };
+  App.sitzung = { rolle: "lehrer", code, fid: null, modus, alsFirma: alsFirma || null, db: datenbankFuer(modus, db) };
   sitzungSpeichern();
   App.bildschirm = "lehrer";
   App.tabL = App.tabL || "cockpit";
@@ -1767,9 +1868,9 @@ async function lehrerOeffnen(code, modus, alsFirma) {
   zeichne();
   await Abgleich.start();
 }
-async function gruppeOeffnen(code, modus, fid) {
-  App.sitzung = { rolle: "gruppe", code, fid, modus, alsFirma: null };
-  sitzungSpeichern();
+async function gruppeOeffnen(code, modus, fid, db, info) {
+  App.sitzung = { rolle: "gruppe", code, fid, modus, alsFirma: null, db: datenbankFuer(modus, db) };
+  sitzungSpeichern(info);
   App.bildschirm = "gruppe";
   App.tabG = "zentrale";
   App.version = null; App.spiel = null; App.eigenerEntscheid = undefined;
@@ -1903,10 +2004,10 @@ async function firmaGruenden(werte) {
   const farbe = DATEN.farben.find((f) => f.id === werte.farbe) || DATEN.farben[0];
   const logo = DATEN.logos.includes(werte.logo) ? werte.logo : DATEN.logos[0];
   const id = neueId("f");
-  const r = await S.schreib(`spiele/${b.code}/firmen/${id}`, { id, name, logo, farbe: farbe.hex, farbId: farbe.id, pinHash: pinHash(b.code, werte.pin), erstellt: Date.now() });
+  const r = await S.schreib(`spiele/${b.code}/firmen/${id}`, { id, name, logo, farbe: farbe.hex, farbId: farbe.id, pinHash: pinHash(gruppenPinCode(b.spiel, b.code), werte.pin), erstellt: Date.now() });
   if (!r.ok) return "Speichern fehlgeschlagen – bitte nochmals versuchen.";
   App.entwurf.gruendung = null;
-  await gruppeOeffnen(b.code, b.modus, id);
+  await gruppeOeffnen(b.code, b.modus, id, b.db, { name, logo });
   toast(`🎉 ${logo} ${name} ist gegründet!`);
   return null;
 }
@@ -1916,7 +2017,9 @@ async function entscheidAbgeben() {
   const s = App.spiel;
   if (!fid || !s) return;
   const schl = entwurfSchluessel();
-  const werte = Object.assign({}, formularWerte());
+  clearTimeout(entwurfUhr);
+  const werte = {};
+  for (const [k, v] of Object.entries(formularWerte())) if (!k.startsWith("_")) werte[k] = v;
   const frisch = await S.lies(`spiele/${code}/spiel`);
   const aktuell = frisch.ok && frisch.daten ? spielNormal(frisch.daten) : null;
   const d = Object.assign({}, werte, { fid, runde: s.runde, level: s.level, zeit: Date.now() });
@@ -1938,6 +2041,7 @@ async function entscheidAbgeben() {
   }
   delete App.entwurf[schl];
   Lokal.loesche("voltage:entwurf:" + schl);
+  App.entwurfErsetzt = null;
   if (App.sitzung.rolle === "lehrer") App.entscheide[fid] = d;
   zeichne();
 }
@@ -1957,7 +2061,7 @@ async function pinZuruecksetzen(fid) {
   const pin = await eingabeDialog({ titel: `Neuer PIN für ${f.logo} ${f.name}`, text: "Vier Ziffern. Teilt den neuen PIN der Gruppe mit.", muster: "\\d{4}", typ: "numeric" });
   if (pin == null) return;
   if (!/^\d{4}$/.test(pin)) { toast("Der PIN besteht aus genau 4 Ziffern."); return; }
-  const r = await store().schreib(`spiele/${App.sitzung.code}/firmen/${fid}/pinHash`, pinHash(App.sitzung.code, pin));
+  const r = await store().schreib(`spiele/${App.sitzung.code}/firmen/${fid}/pinHash`, pinHash(gruppenPinCode(App.spiel, App.sitzung.code), pin));
   toast(r.ok ? "🔑 Neuer PIN gespeichert" : "⚠️ Keine Verbindung.");
 }
 
@@ -1985,7 +2089,11 @@ async function reflexionSpeichern(teil, formular) {
   const r = await store().schreib(`spiele/${App.sitzung.code}/reflexion/${teil}/${fid}`, { antworten, zeit: Date.now() });
   if (r.ok) {
     App.reflexion[teil] = Object.assign({}, App.reflexion[teil], { [fid]: { antworten, zeit: Date.now() } });
-    $$("textarea[data-frage]", formular).forEach((t) => { delete App.entwurf[reflexionsSchluessel(teil, t.dataset.frage)]; });
+    $$("textarea[data-frage]", formular).forEach((t) => {
+      const k = reflexionsSchluessel(teil, t.dataset.frage);
+      clearTimeout(App.reflexionUhren[k]); delete App.reflexionUhren[k];
+      delete App.entwurf[k]; Lokal.loesche("voltage:" + k);
+    });
     toast("💾 Antworten gespeichert");
     zeichne();
   } else toast("⚠️ Speichern fehlgeschlagen – bitte nochmals versuchen.");
@@ -2064,7 +2172,9 @@ async function sicherungEinspielen(datei) {
   if (!ok) return;
   const S = store(), code = App.sitzung.code, aktuell = App.spiel;
   const inhalt = kopie(daten.spiel);
-  inhalt.spiel = spielDaten(spielNormal(inhalt.spiel), { code, version: num(aktuell && aktuell.version) + 1 });
+  const alt = spielNormal(inhalt.spiel);
+  const herkunft = alt.pinCode || (/^[A-HJ-NP-Z2-9]{6}$/.test(String(daten.code || "")) ? daten.code : null);
+  inhalt.spiel = spielDaten(alt, { code, version: num(aktuell && aktuell.version) + 1, pinCode: herkunft && herkunft !== code ? herkunft : null });
   const r = await S.schreib(`spiele/${code}`, inhalt);
   if (!r.ok) { toast("⚠️ Einspielen fehlgeschlagen."); return; }
   toast("✅ Sicherung eingespielt");
@@ -2296,6 +2406,16 @@ function notizenHtml(liste_) {
 /* =========================================================================
    11. BILDSCHIRME
    ========================================================================= */
+// Merkt sich, welche Abschnitte (details) offen sind, damit Neuzeichnen sie nicht schliesst
+function auf(id, standard) {
+  const w = App.aufgeklappt[id];
+  return (w === undefined ? standard : w) ? "open" : "";
+}
+document.addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (d && d.tagName === "DETAILS" && d.dataset.auf) App.aufgeklappt[d.dataset.auf] = d.open;
+}, true);
+
 function zeichne() {
   App.renderWartet = false;
   const f = {
@@ -2324,6 +2444,7 @@ function ansichtStart() {
   <main class="huelle stapel">
     <section class="held">${doseSvg(88, "held")}<div class="stapel" style="gap:6px">
       <div class="wortmarke">Voltage</div><p class="gedaempft" style="font-size:1.1rem">${esc(DATEN.untertitel)}</p></div></section>
+    ${weiterAlsKarte()}
     <p style="max-width:62ch">${esc(DATEN.einleitung)}</p>
     <div class="rollen">
       <button class="rolle" data-act="rolleGruppe"><span class="ic">🔋</span><b>Gruppe</b><span class="gedaempft">Firma gründen oder wieder anmelden</span></button>
@@ -2434,6 +2555,7 @@ function ansichtBeitritt() {
     <div><button class="knopf zweit klein" data-act="beitrittZurueck"><span>← Anderer Code</span></button></div>
     <h1>${esc(s.name)}</h1>
     <p class="gedaempft">Spielcode <b class="zahl">${esc(b.code)}</b> · ${b.modus === "online" ? "🌐 online" : "📱 auf diesem Gerät"}</p>
+    ${weiterAlsKarte(b.code)}
     ${firmen.length ? `<section class="karte stapel"><h2>Wieder anmelden</h2>
       <div class="stapel" style="gap:8px">${firmen.map((f) => `<button class="option" data-act="firmaWaehlen" data-fid="${esc(f.id)}" aria-pressed="${b.gewaehlt === f.id}">${firmaLabel(f)}</button>`).join("")}</div>
       ${gewaehlt ? `<form class="stapel" data-form="gruppeLogin" autocomplete="off">
@@ -2471,12 +2593,12 @@ function ansichtLehrerStart() {
     <div class="zeile"><button class="knopf" data-act="lehrerNeu"><span>＋ Neues Spiel erstellen</span></button>
       <button class="knopf zweit" data-act="einrichten"><span>🌐 Online-Modus${online ? " ✓" : ""}</span></button></div>
     ${spiele.length ? `<section class="karte stapel"><h2>Meine Spiele auf diesem Gerät</h2>
-      <div class="stapel" style="gap:8px">${spiele.map((s) => `<button class="option" data-act="lehrerWahl" data-code="${esc(s.code)}" data-modus="${esc(s.modus)}" aria-pressed="${wahl && wahl.code === s.code}">
+      <div class="stapel" style="gap:8px">${spiele.map((s) => `<button class="option" data-act="lehrerWahl" data-code="${esc(s.code)}" data-modus="${esc(s.modus)}" data-db="${esc(s.db || "")}" aria-pressed="${wahl && wahl.code === s.code}">
         <b>${esc(s.name)}${s.demo ? " (Demo)" : ""}</b><span class="klein">Code ${esc(s.code)} · ${s.modus === "online" ? "🌐 online" : "📱 dieses Gerät"} · erstellt ${esc(datumZeit(s.erstellt))}</span></button>`).join("")}</div>
     </section>` : ""}
     <form class="karte stapel" data-form="lehrerLogin" autocomplete="off">
       <h2>${wahl ? "Anmelden: " + esc(wahl.code) : "Spiel öffnen"}</h2>
-      ${wahl ? `<input type="hidden" name="code" value="${esc(wahl.code)}"><input type="hidden" name="modus" value="${esc(wahl.modus)}">` : `
+      ${wahl ? `<input type="hidden" name="code" value="${esc(wahl.code)}"><input type="hidden" name="modus" value="${esc(wahl.modus)}"><input type="hidden" name="db" value="${esc(wahl.db || "")}">` : `
         <label class="feld"><span class="t">Spielcode</span><input type="text" id="ll-code" name="code" maxlength="8" required autocapitalize="characters" style="text-transform:uppercase; letter-spacing:.2em; font-family:var(--mono)"></label>
         <span class="hilfe klein gedaempft">Für ein Spiel, das auf einem anderen Gerät erstellt wurde (nur im Online-Modus).</span>`}
       <label class="feld"><span class="t">Lehrpersonen-PIN</span><input type="password" id="ll-pin" name="pin" maxlength="12" required ${wahl ? "autofocus" : ""}></label>
@@ -2592,7 +2714,7 @@ function lehrerCockpit() {
   if (s.status === "vorbereitung") {
     const checks = gruppen.filter((f) => f.startcheck).length;
     schritt = `<h2>🧭 Phase 1 · Einstieg</h2>
-      <p>Die Gruppen gründen ihre Firmen und lösen den Start-Check (${checks} von ${gruppen.length} erledigt). Bereit sind <b>${gruppen.length} ${gruppen.length === 1 ? "Firma" : "Firmen"}</b>${s.einstellungen.ki ? ` und ${s.einstellungen.ki} Computer-Konkurrenz` : ""}.</p>
+      <p>Die Gruppen gründen ihre Firmen und lösen den Start-Check (${checks} von ${gruppen.length} erledigt). Bereit: <b>${gruppen.length} ${gruppen.length === 1 ? "Gruppe" : "Gruppen"}</b>${s.einstellungen.ki ? ` und ${s.einstellungen.ki} ${s.einstellungen.ki === 1 ? "Computer-Firma" : "Computer-Firmen"}` : ""}.</p>
       ${rundenPlaner(1)}`;
   } else if (s.status === "offen") {
     const fehlen = gruppen.filter((f) => !abgaben.includes(f));
@@ -2738,7 +2860,7 @@ function lehrerEingaben() {
   } else html += `<div class="zeile"><button class="knopf zweit klein" data-act="druckBlatt"><span>🖨️ Entscheidungsblatt drucken</span></button></div>`;
   for (const r of runden) {
     const R = App.resultate[r];
-    html += `<details class="aufklapp"><summary>Quartal ${r} · Level ${R.level}</summary><div class="inhalt"><div class="tabwrap"><table>${entscheidKopf()}<tbody>
+    html += `<details class="aufklapp" data-auf="eing-r${r}" ${auf("eing-r" + r, false)}><summary>Quartal ${r} · Level ${R.level}</summary><div class="inhalt"><div class="tabwrap"><table>${entscheidKopf()}<tbody>
       ${Object.entries(R.firmen).map(([fid, x]) => entscheidZeile(firmaVon(fid) || { id: fid, name: "(entfernt)", logo: "", farbe: "#999999" }, x.entscheid, false).replace("</td>", x.abgegeben ? "</td>" : ' <span class="chip">Autopilot</span></td>')).join("")}
     </tbody></table></div></div></details>`;
   }
@@ -2760,11 +2882,11 @@ function lehrerReflexion() {
   for (const l of gespielt) {
     const ld = levelDaten(l);
     const anzahl = Object.keys((App.reflexion || {})["l" + l] || {}).length;
-    html += `<details class="aufklapp" ${l === App.spiel.level ? "open" : ""}><summary>${ld.ic} Level ${l} · ${esc(ld.titel)} <span class="chip">${anzahl}/${gruppen.length}</span></summary><div class="inhalt stapel">${antwortenBlock("l" + l, ld.reflexion)}</div></details>`;
+    html += `<details class="aufklapp" data-auf="refl-l${l}" ${auf("refl-l" + l, l === App.spiel.level)}><summary>${ld.ic} Level ${l} · ${esc(ld.titel)} <span class="chip">${anzahl}/${gruppen.length}</span></summary><div class="inhalt stapel">${antwortenBlock("l" + l, ld.reflexion)}</div></details>`;
   }
   if (App.spiel.status === "beendet") {
     const anzahl = Object.keys((App.reflexion || {}).transfer || {}).length;
-    html += `<details class="aufklapp" open><summary>🎓 Transfer <span class="chip">${anzahl}/${gruppen.length}</span></summary><div class="inhalt stapel">${antwortenBlock("transfer", DATEN.transfer)}</div></details>`;
+    html += `<details class="aufklapp" data-auf="refl-transfer" ${auf("refl-transfer", true)}><summary>🎓 Transfer <span class="chip">${anzahl}/${gruppen.length}</span></summary><div class="inhalt stapel">${antwortenBlock("transfer", DATEN.transfer)}</div></details>`;
   }
   if (!gespielt.length) html += `<section class="karte"><p class="gedaempft">Die Reflexionsfragen erscheinen, sobald das erste Quartal eines Levels ausgewertet ist.</p></section>`;
   return html;
@@ -2940,16 +3062,30 @@ function startwerteFormular() {
   }
 }
 function formularWerte() {
-  const k = entwurfSchluessel();
-  if (!App.entwurf[k]) {
+  const k = entwurfSchluessel(), e = App.eigenerEntscheid;
+  const eZeit = e && e.zeit ? num(e.zeit) : 0;
+  let w = App.entwurf[k];
+  if (!w) {
     const gespeichert = Lokal.lies("voltage:entwurf:" + k, null);
-    App.entwurf[k] = gespeichert && typeof gespeichert === "object" ? Object.assign(startwerteFormular(), gespeichert) : startwerteFormular();
+    if (gespeichert && typeof gespeichert === "object") w = Object.assign(startwerteFormular(), gespeichert, { _basis: num(gespeichert._basis) });
   }
-  return App.entwurf[k];
+  // Eine neuere Abgabe (Lehrperson, anderes Gerät) ersetzt einen älteren Entwurf
+  if (w && e !== undefined && num(w._basis) < eZeit) {
+    w = null;
+    Lokal.loesche("voltage:entwurf:" + k);
+    App.entwurfErsetzt = k;   // Hinweis bleibt, bis die Gruppe weiterarbeitet oder abgibt
+  }
+  if (!w) {
+    w = Object.assign(startwerteFormular(), { _basis: eZeit });
+    if (e === undefined) return w;   // eigene Abgabe noch nicht geladen: nichts zwischenspeichern
+  }
+  App.entwurf[k] = w;
+  return w;
 }
 let entwurfUhr = null;
 function entwurfMerken() {
   clearTimeout(entwurfUhr);
+  App.entwurfErsetzt = null;
   const k = entwurfSchluessel(), w = App.entwurf[k];
   entwurfUhr = setTimeout(() => Lokal.schreib("voltage:entwurf:" + k, Object.assign({}, w, { _geaendert: Date.now() })), 400);
 }
@@ -2977,6 +3113,7 @@ function gruppeEntscheiden(f) {
     const txt = { vorbereitung: "Sobald die Lehrperson Quartal 1 freischaltet, trefft ihr hier eure Entscheidungen.", auswertung: "Die Lehrperson wertet gerade aus – gleich kommt euer Bericht.", ausgewertet: "Das Quartal ist ausgewertet. Schaut euren Bericht an – das nächste Quartal kommt bald.", beendet: "Das Spiel ist beendet. Zeit für die Schlussbilanz!" }[s.status];
     return `<section class="karte stapel"><h2>🔒 Gerade keine Eingabe möglich</h2><p>${txt}</p></section>`;
   }
+  if (App.eigenerEntscheid === undefined) return ladeHinweis();
   const L = s.level, ld = levelDaten(L), fid = f.id;
   const z = zustandVor(fid, s.runde);
   const w = formularWerte();
@@ -2985,9 +3122,10 @@ function gruppeEntscheiden(f) {
   const e = App.eigenerEntscheid;
   const k = r.kosten, loehne = r.loehne;
   let html = "";
+  if (App.entwurfErsetzt && App.entwurfErsetzt === entwurfSchluessel()) { html += `<div class="hinweis">🔄 Eure Entscheidungen wurden inzwischen auf einem anderen Gerät geändert. Hier seht ihr den neusten Stand.</div>`; }
   if (e && e.zeit && abgabeAusstehend()) html += `<div class="hinweis achtung">📶 Eure Abgabe ist auf diesem Gerät gespeichert, aber noch nicht übertragen. Sie wird automatisch gesendet, sobald die Verbindung wieder steht.</div>`;
   else if (e && e.zeit) html += `<div class="hinweis ${entwurfWeichtAb() ? "achtung" : "gut"}">${entwurfWeichtAb() ? "✏️ Ihr habt Änderungen, die noch nicht abgegeben sind." : `✅ Abgegeben um ${uhrzeit(e.zeit)}${e.erfasstVon ? " (von der Lehrperson erfasst)" : ""}. Bis zur Auswertung könnt ihr noch ändern.`}</div>`;
-  html += `<details class="aufklapp" ${erstesQuartalImLevel ? "open" : ""}><summary>${ld.ic} Level ${L}: ${esc(ld.titel)}</summary><div class="inhalt stapel">
+  html += `<details class="aufklapp" data-auf="level-${s.runde}" ${auf("level-" + s.runde, erstesQuartalImLevel)}><summary>${ld.ic} Level ${L}: ${esc(ld.titel)}</summary><div class="inhalt stapel">
       <p><b>Ziel:</b> ${esc(ld.ziel)}</p>
       <p><b>Neu:</b> ${ld.neu.map(esc).join(" · ")}</p>
       <dl class="lexikon">${ld.wissen.map(([b, t]) => `<dt>${esc(b)}</dt><dd>${esc(t)}</dd>`).join("")}</dl>
@@ -3017,8 +3155,8 @@ function gruppeEntscheiden(f) {
       <p class="klein" id="bekanntheit-hinweis"></p>`);
   if (L >= 3) html += bereichHtml("👷 Mitarbeitende", 3, L, `
       <div class="raster r2">
-        <div class="feld"><span class="t">Einstellen (+) oder entlassen (−)</span>${zahlFeld("personal", w.personal, { schritt: 1, min: -(z.mitarbeitende - 1), max: r.personalMaxPlus, einheit: "Personen" })}
-          <span class="hilfe">Aktuell ${z.mitarbeitende} Personen. Einstellen kostet ${fr(r.einstellungskosten)} pro Person, Entlassen einen Monatslohn.</span></div>
+        <div class="feld"><span class="t">Einstellen (+) oder entlassen (−)</span>${zahlFeld("personal", w.personal, { schritt: 1, min: -(Engine.personalPlan(z, 0, L).basis - 1), max: r.personalMaxPlus, einheit: "Personen" })}
+          <span class="hilfe">Aktuell ${personenText(z.mitarbeitende)}. Einstellen kostet ${fr(r.einstellungskosten)} pro Person, Entlassen einen Monatslohn.</span></div>
         <div class="feld"><span class="t">Weiterbildung (Fr.)</span>${zahlFeld("weiterbildung", w.weiterbildung, { schritt: 1000, max: r.weiterbildungMax, einheit: "Franken Weiterbildung" })}
           <span class="hilfe">Steigert Qualität und Zufriedenheit.</span></div>
       </div>
@@ -3045,8 +3183,7 @@ function gruppeEntscheiden(f) {
   return html;
 }
 function kapazitaetMitPersonal(z, w, L, s) {
-  const zz = Object.assign({}, z);
-  if (L >= 3) zz.mitarbeitende = Math.max(1, z.mitarbeitende + klemme(Math.round(num(w.personal)), -(z.mitarbeitende - 1), R_().personalMaxPlus));
+  const zz = Object.assign({}, z, { mitarbeitende: Engine.personalPlan(z, w.personal, L).mitarbeitende });
   if (L >= 5 && w.investAnlage === true) zz.anlageKauf = 1;
   return Engine.kapazitaetVon(zz, Engine.effekte(s.ereignisse));
 }
@@ -3059,15 +3196,15 @@ function aktualisierePlanung() {
   const w = formularWerte();
   const d = Engine.normalisiere(w, L, z);
   const fx = Engine.effekte(s.ereignisse);
-  const zz = Object.assign({}, z);
-  zz.mitarbeitende = Math.max(1, z.mitarbeitende + d.personal);
+  const pp = Engine.personalPlan(z, d.personal, L);
+  const zz = Object.assign({}, z, { mitarbeitende: pp.mitarbeitende });
   if (d.investAnlage) zz.anlageKauf = r.investitionen.anlage.preis;
   if (d.investSolar) zz.solarKauf = r.investitionen.solar.preis;
   const kap = Engine.kapazitaetVon(zz, fx);
   const menge = Math.min(d.menge, kap);
   const unit = Engine.stueckkostenVon(d, zz, fx, menge);
   const lohn = r.loehne[d.lohn];
-  const personal = zz.mitarbeitende * lohn * 3 + Math.max(0, d.personal) * r.einstellungskosten + Math.max(0, -d.personal) * lohn;
+  const personal = zz.mitarbeitende * lohn * 3 + pp.eingestellt * r.einstellungskosten + pp.entlassen * lohn;
   const herstellung = Math.round(menge * unit);
   const marketing = d.social + d.plakat + d.sponsoring;
   const kredit = Math.max(0, z.kredit + d.kreditNeu - d.kreditRueck);
@@ -3087,7 +3224,7 @@ function aktualisierePlanung() {
   el.innerHTML =
     zeile(`Kosten pro Dose`, preis(unit)) +
     zeile(`Herstellung (${fmt(menge)} × ${preis(unit)})`, fr(herstellung)) +
-    zeile(`Löhne ${L >= 3 && d.personal ? "und Personalwechsel" : ""} (${zz.mitarbeitende} Personen)`, fr(personal)) +
+    zeile(`Löhne${L >= 3 && (pp.delta || pp.gekuendigt) ? " und Personalwechsel" : ""} (${personenText(zz.mitarbeitende)})`, fr(personal)) +
     zeile(L >= 2 ? "Werbung" : "Werbung (Grundbudget)", fr(marketing)) +
     zeile("Fixkosten (Miete, Verwaltung)", fr(r.fixkosten)) +
     (weitere ? zeile("Weitere (Weiterbildung, Lernende, Engagement, Zins, Abschreibung)", fr(weitere)) : "") +
@@ -3102,7 +3239,7 @@ function aktualisierePlanung() {
   else if (be > pr.richtwert * 1.1) warn.push(["achtung", `🤔 Die Gewinnschwelle (${fmt(be)} Dosen) liegt über der Prognose von rund ${fmt(pr.richtwert)} Dosen. Braucht eure Marke dafür mehr Kundschaft als eine durchschnittliche Firma?`]);
   if (verfuegbar > pr.richtwert * 1.4 && verfuegbar - pr.richtwert > r.lagerMax) warn.push(["achtung", `📦 Ihr bietet viel mehr an als die Prognose. Was nicht verkauft wird und nicht ins Lager passt (${fmt(r.lagerMax)}), wird verramscht.`]);
   if (kasseErwartet < 0) warn.push(["achtung", `🏦 Verkauft ihr ungefähr so viel wie die Prognose, reicht eure Kasse (${fr(z.kasse)}) nicht – dann springt die Bank mit einem teuren Notkredit ein.`]);
-  if (L >= 3 && z.zufriedenheit < r.fluktuationUnter) warn.push(["schlecht", `🚪 Die Zufriedenheit ist unter ${r.fluktuationUnter}: Diesen Quartal kündigt eine Person. Höhere Löhne oder Weiterbildung helfen.`]);
+  if (pp.gekuendigt) warn.push(["schlecht", `🚪 Die Zufriedenheit ist unter ${r.fluktuationUnter}: In diesem Quartal kündigt eine Person – ihr habt dann ${personenText(pp.basis)} plus eure Änderung. Höhere Löhne oder Weiterbildung helfen.`]);
   $("#planung-warnung").innerHTML = warn.map(([c, t]) => `<p class="hinweis ${c}">${t}</p>`).join("");
   const ph = $("#preis-anzeige"); if (ph) ph.textContent = preis(d.preis);
   const kh = $("#kap-hinweis"); if (kh) kh.textContent = `Kapazität: ${fmt(kap)} Dosen · im Lager: ${fmt(z.lager)} Dosen · Angebot total: ${fmt(verfuegbar)} Dosen`;
@@ -3209,14 +3346,19 @@ function gruppeReflexion(f) {
   return teile.slice().reverse().map((t, i) => {
     const gesp = ((App.reflexion || {})[t.id] || {})[f.id];
     const a = (gesp && gesp.antworten) || {};
-    return `<details class="aufklapp" ${i === 0 ? "open" : ""}><summary>${esc(t.titel)} ${gesp ? '<span class="chip offen">gespeichert</span>' : '<span class="chip">offen</span>'}</summary>
+    return `<details class="aufklapp" data-auf="grefl-${t.id}" ${auf("grefl-" + t.id, i === 0)}><summary>${esc(t.titel)} ${gesp ? '<span class="chip offen">gespeichert</span>' : '<span class="chip">offen</span>'}</summary>
       <form class="inhalt stapel" data-form="reflexion" data-teil="${t.id}">
-        ${t.fragen.map((q, j) => { const ent = App.entwurf[reflexionsSchluessel(t.id, j)]; return `<label class="feld"><span style="font-weight:700">${j + 1}. ${esc(q)}</span><textarea id="rf-${t.id}-${j}" data-frage="${j}" data-teil="${t.id}" maxlength="1000">${esc(ent != null ? ent : a["f" + j] || "")}</textarea></label>`; }).join("")}
+        ${t.fragen.map((q, j) => { const ent = reflexionsEntwurf(t.id, j); return `<label class="feld"><span style="font-weight:700">${j + 1}. ${esc(q)}</span><textarea id="rf-${t.id}-${j}" data-frage="${j}" data-teil="${t.id}" maxlength="1000">${esc(ent != null ? ent : a["f" + j] || "")}</textarea></label>`; }).join("")}
         <div><button class="knopf" type="submit"><span>💾 Antworten speichern</span></button></div>
       </form></details>`;
   }).join("");
 }
 function reflexionsSchluessel(teil, frage) { return `rf:${App.sitzung.code}:${aktiveFirmaId()}:${teil}:${frage}`; }
+function reflexionsEntwurf(teil, frage) {
+  const k = reflexionsSchluessel(teil, frage);
+  if (App.entwurf[k] == null) { const g = Lokal.lies("voltage:" + k, null); if (typeof g === "string") App.entwurf[k] = g; }
+  return App.entwurf[k];
+}
 function gruppeHilfe() { return anleitungInhalt(); }
 
 /* ---------- Druck: Entscheidungsblatt und Klassenbericht ---------- */
@@ -3269,7 +3411,7 @@ function feldWert(form, name) { const el = form.elements.namedItem(name); return
 async function beitrittLaden(r) {
   const fR = await store(r.modus).lies(`spiele/${r.code}/firmen`);
   if (!fR.ok) { toast("⚠️ Keine Verbindung – bitte nochmals versuchen."); return; }
-  App.beitritt = { code: r.code, modus: r.modus, spiel: r.spiel, firmen: firmenNormal(fR.daten), gewaehlt: null };
+  App.beitritt = { code: r.code, modus: r.modus, db: r.db || null, spiel: r.spiel, firmen: firmenNormal(fR.daten), gewaehlt: null };
   App.bildschirm = "beitritt";
   zeichne();
 }
@@ -3290,8 +3432,10 @@ const AKTIONEN = {
   demo: () => demoStarten(),
   lehrerNeu() { App.bildschirm = "lehrerNeu"; zeichne(); window.scrollTo(0, 0); },
   einrichten() { App.bildschirm = "einrichten"; zeichne(); window.scrollTo(0, 0); },
-  onlineAus() { Lokal.loesche("voltage:firebaseUrl"); FirebaseDB.basis = onlineAdresse(); toast("Online-Modus ausgeschaltet"); zeichne(); },
-  lehrerWahl(el) { App.entwurf.lehrerWahl = { code: el.dataset.code, modus: el.dataset.modus === "online" ? "online" : "lokal" }; zeichne(); const p = $("#ll-pin"); if (p) p.focus(); },
+  onlineAus() { Lokal.loesche("voltage:firebaseUrl"); Sitzungsspeicher.loesche("voltage:dbLink"); FirebaseDB.basis = onlineAdresse(); toast("Online-Modus ausgeschaltet"); zeichne(); },
+  lehrerWahl(el) { App.entwurf.lehrerWahl = { code: el.dataset.code, modus: el.dataset.modus === "online" ? "online" : "lokal", db: gueltigeDbUrl(el.dataset.db) ? el.dataset.db : "" }; zeichne(); const p = $("#ll-pin"); if (p) p.focus(); },
+  async weiterAls() { const l = letzteGruppe(); if (!l) { zeichne(); return; } await gruppeOeffnen(l.code, l.modus, l.fid, l.db, l); },
+  vergessen() { Lokal.loesche("voltage:sitzung"); zeichne(); },
   async spielWaehlen(el) { const r = await spielSuchen(el.dataset.code); if (r.fehler) toast(r.fehler); else await beitrittLaden(r); },
   beitrittZurueck() { App.beitritt = null; zeichne(); },
   firmaWaehlen(el) { App.beitritt.gewaehlt = el.dataset.fid; zeichne(); const p = $("#login-pin"); if (p) p.focus(); },
@@ -3317,7 +3461,9 @@ const AKTIONEN = {
   tabG(el) { App.tabG = el.dataset.tab; zeichne(); },
   ereignis(el) {
     const plan = App.entwurf.runde || (App.entwurf.runde = { ereignisse: [] });
-    const l = liste(plan.ereignisse), k = el.dataset.ev;
+    const s = App.spiel, n = s.status === "vorbereitung" ? 1 : s.runde + 1;
+    const level = klemme(num(plan.level, vorgeschlagenesLevel(n)), 1, 5);
+    const l = liste(plan.ereignisse).filter((x) => DATEN.ereignisse[x] && DATEN.ereignisse[x].abLevel <= level), k = el.dataset.ev;
     if (l.includes(k)) plan.ereignisse = l.filter((x) => x !== k);
     else if (l.length >= 2) { toast("Höchstens zwei Ereignisse pro Quartal"); return; }
     else plan.ereignisse = l.concat(k);
@@ -3343,6 +3489,7 @@ const AKTIONEN = {
     App.sitzung.alsFirma = el.dataset.fid;
     sitzungSpeichern();
     App.eigenerEntscheid = undefined;
+    App.entwurfErsetzt = null;
     App.tabG = App.spiel && App.spiel.status === "offen" ? "entscheiden" : "zentrale";
     App.bildschirm = "gruppe";
     await Abgleich.tick(true);
@@ -3351,6 +3498,7 @@ const AKTIONEN = {
   },
   async zurueckKontrollraum() {
     App.sitzung.alsFirma = null;
+    App.entwurfErsetzt = null;
     sitzungSpeichern();
     App.bildschirm = "lehrer";
     App.quiz = null;
@@ -3434,10 +3582,11 @@ const FORMULARE = {
   async gruppeLogin(f) {
     const b = App.beitritt, firma = b && b.firmen[b.gewaehlt];
     if (!firma) return;
+    datenbankFuer(b.modus, b.db);
     const frisch = await store(b.modus).lies(`spiele/${b.code}/firmen/${firma.id}/pinHash`);
     const soll = frisch.ok && typeof frisch.daten === "string" ? frisch.daten : firma.pinHash;
-    if (pinHash(b.code, feldWert(f, "pin")) !== soll) { toast("❌ Der PIN stimmt nicht."); const p = $("#login-pin"); if (p) { p.value = ""; p.focus(); } return; }
-    await gruppeOeffnen(b.code, b.modus, firma.id);
+    if (pinHash(gruppenPinCode(b.spiel, b.code), feldWert(f, "pin")) !== soll) { toast("❌ Der PIN stimmt nicht."); const p = $("#login-pin"); if (p) { p.value = ""; p.focus(); } return; }
+    await gruppeOeffnen(b.code, b.modus, firma.id, b.db);
     toast(`👋 Willkommen zurück, ${firma.name}!`);
   },
   async gruenden(f) {
@@ -3449,8 +3598,9 @@ const FORMULARE = {
   async lehrerLogin(f) {
     const code = feldWert(f, "code").toUpperCase().replace(/[^A-Z0-9]/g, "");
     const pin = feldWert(f, "pin");
-    let modus = feldWert(f, "modus");
-    if (!modus) { const r = await spielSuchen(code); if (r.fehler) { toast(r.fehler, 4500); return; } modus = r.modus; }
+    let modus = feldWert(f, "modus"), db = feldWert(f, "db") || null;
+    if (!modus) { const r = await spielSuchen(code); if (r.fehler) { toast(r.fehler, 4500); return; } modus = r.modus; db = r.db; }
+    db = datenbankFuer(modus, db);
     const S = store(modus);
     const r = await S.lies(`lehrer/${code}/${pinHash(code, pin)}`);
     if (!r.ok) { toast("⚠️ Keine Verbindung zur Datenbank."); return; }
@@ -3458,10 +3608,10 @@ const FORMULARE = {
     const sp = await S.lies(`spiele/${code}/spiel`);
     if (!sp.ok || !sp.daten) { toast("Dieses Spiel gibt es nicht mehr."); meineSpieleEntfernen(code); zeichne(); return; }
     const s = spielNormal(sp.daten);
-    meineSpieleMerken({ code, name: s.name, modus, erstellt: s.erstellt, demo: s.demo || undefined });
+    meineSpieleMerken({ code, name: s.name, modus, db, erstellt: s.erstellt, demo: s.demo || undefined });
     App.entwurf.lehrerWahl = null;
     App.tabL = "cockpit";
-    await lehrerOeffnen(code, modus);
+    await lehrerOeffnen(code, modus, null, db);
   },
   async spielNeu(f) {
     const pin = feldWert(f, "pin").trim(), pin2 = feldWert(f, "pin2").trim();
@@ -3474,7 +3624,7 @@ const FORMULARE = {
     });
     if (e.fehler) { toast("⚠️ " + e.fehler, 4500); return; }
     App.tabL = "cockpit";
-    await lehrerOeffnen(e.code, e.modus);
+    await lehrerOeffnen(e.code, e.modus, null, e.db);
     toast(`✅ Spiel erstellt – Spielcode ${e.code}`, 4500);
   },
   async einrichten(f) {
@@ -3487,6 +3637,7 @@ const FORMULARE = {
     const r = await FirebaseDB.lies("spiele/TESTXY/spiel");
     if (r.ok) {
       Lokal.schreib("voltage:firebaseUrl", url);
+      Sitzungsspeicher.loesche("voltage:dbLink");
       out.textContent = "✅ Verbindung klappt. Der Online-Modus ist eingerichtet.";
       toast("🌐 Online-Modus eingerichtet");
       setTimeout(() => { App.bildschirm = "lehrerStart"; zeichne(); }, 1200);
@@ -3535,7 +3686,13 @@ document.addEventListener("input", (e) => {
     return;
   }
   if (t.dataset.gr && App.entwurf.gruendung) { App.entwurf.gruendung[t.dataset.gr] = t.value; return; }
-  if (t.dataset.frage != null && t.dataset.teil) { App.entwurf[reflexionsSchluessel(t.dataset.teil, t.dataset.frage)] = t.value; return; }
+  if (t.dataset.frage != null && t.dataset.teil) {
+    const k = reflexionsSchluessel(t.dataset.teil, t.dataset.frage);
+    App.entwurf[k] = t.value;
+    clearTimeout(App.reflexionUhren[k]);   // ein Zeitgeber pro Feld: schnelles Wechseln verliert nichts
+    App.reflexionUhren[k] = setTimeout(() => { delete App.reflexionUhren[k]; Lokal.schreib("voltage:" + k, t.value); }, 400);
+    return;
+  }
   if (t.id === "beitritt-code") App.entwurf.beitrittCode = t.value;
 });
 document.addEventListener("change", async (e) => {
@@ -3570,25 +3727,31 @@ document.addEventListener("change", async (e) => {
 function start() {
   const thema = Lokal.lies("voltage:thema", null);
   if (thema === "dark" || thema === "light") document.documentElement.dataset.theme = thema;
-  FirebaseDB.basis = onlineAdresse();
   let params;
   try { params = new URLSearchParams(location.search); } catch (e) { params = new URLSearchParams(""); }
+  // ?db= aus dem Klassen-Link gilt für diesen Tab; gespeichert wird er nur, wenn noch keine Adresse bekannt ist
   const db = params.get("db");
   if (db && gueltigeDbUrl(db) && !gueltigeDbUrl(KONFIG.firebaseUrl)) {
-    Lokal.schreib("voltage:firebaseUrl", db.trim().replace(/\/+$/, ""));
-    FirebaseDB.basis = onlineAdresse();
+    const url = db.trim().replace(/\/+$/, "");
+    Sitzungsspeicher.schreib("voltage:dbLink", url);
+    if (!gueltigeDbUrl(Lokal.lies("voltage:firebaseUrl", ""))) Lokal.schreib("voltage:firebaseUrl", url);
   }
+  FirebaseDB.basis = onlineAdresse();
   const codeParam = (params.get("spiel") || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // Sitzungen gelten pro Tab: Neu laden bleibt in derselben Rolle, ein neuer Tab beginnt auf der Startseite
   const sl = Sitzungsspeicher.lies("voltage:sitzungL", null);
-  const sg = Lokal.lies("voltage:sitzung", null);
-  const modusOk = (m) => m !== "online" || !!onlineAdresse();
-  if (sl && sl.rolle === "lehrer" && sl.code && modusOk(sl.modus) && (!codeParam || codeParam === sl.code)) {
-    App.sitzung = { rolle: "lehrer", code: sl.code, fid: null, modus: sl.modus === "online" ? "online" : "lokal", alsFirma: sl.alsFirma || null };
-    App.bildschirm = sl.alsFirma ? "gruppe" : "lehrer";
+  const sg = Sitzungsspeicher.lies("voltage:sitzungG", null);
+  const modusOk = (x) => x.modus !== "online" || gueltigeDbUrl(x.db) || !!onlineAdresse();
+  const passt = (x) => x && typeof x === "object" && typeof x.code === "string" && /^[A-Z0-9]{6,12}$/.test(x.code) && modusOk(x) && (!codeParam || codeParam === x.code);
+  if (passt(sl) && sl.rolle === "lehrer") {
+    const modus = sl.modus === "online" ? "online" : "lokal";
+    App.sitzung = { rolle: "lehrer", code: sl.code, fid: null, modus, alsFirma: typeof sl.alsFirma === "string" ? sl.alsFirma : null, db: datenbankFuer(modus, sl.db) };
+    App.bildschirm = App.sitzung.alsFirma ? "gruppe" : "lehrer";
     zeichne();
     Abgleich.start();
-  } else if (sg && sg.rolle === "gruppe" && sg.code && sg.fid && modusOk(sg.modus) && (!codeParam || codeParam === sg.code)) {
-    App.sitzung = { rolle: "gruppe", code: sg.code, fid: sg.fid, modus: sg.modus === "online" ? "online" : "lokal", alsFirma: null };
+  } else if (passt(sg) && sg.rolle === "gruppe" && /^[a-z0-9]{3,20}$/i.test(String(sg.fid || ""))) {
+    const modus = sg.modus === "online" ? "online" : "lokal";
+    App.sitzung = { rolle: "gruppe", code: sg.code, fid: sg.fid, modus, alsFirma: null, db: datenbankFuer(modus, sg.db) };
     App.bildschirm = "gruppe";
     zeichne();
     Abgleich.start();
