@@ -30,7 +30,7 @@ async function gruppeGruenden(seite, url, code, name, pin) {
   await seite.locator(".leiste .kontext", { hasText: name }).waitFor();
 }
 async function entscheiden(seite, anpassen) {
-  await seite.click('[data-act="tabG"][data-tab="entscheiden"]');
+  await seite.click('.tab[data-act="tabG"][data-tab="entscheiden"]');
   await seite.locator("#planung").waitFor();
   if (anpassen) await anpassen(seite);
   await seite.click('[data-act="abgeben"]');
@@ -96,21 +96,21 @@ test("Ein-Geräte-Modus: vom Einstieg bis zum Transfer", { skip: !pw && "Playwri
   await lehrer.locator("h2", { hasText: "Quartal 1 ist ausgewertet" }).waitFor();
 
   // Bericht der Gruppe
-  await alpha.click('[data-act="tabG"][data-tab="bericht"]');
+  await alpha.click('.tab[data-act="tabG"][data-tab="bericht"]');
   await alpha.locator("h2", { hasText: "Quartalsbericht Q1" }).waitFor({ timeout: 10000 });
   assert.ok(await alpha.locator(".notizen li").count() >= 2, "Erklärungen im Bericht");
   const preisAlpha = await alpha.locator("tr.ich td.z").first().textContent();
   assert.equal(preisAlpha.trim(), "3.10");
 
   // Reflexion Level 1 (bei 1 Quartal pro Level sofort freigeschaltet)
-  await alpha.click('[data-act="tabG"][data-tab="reflexion"]');
+  await alpha.click('.tab[data-act="tabG"][data-tab="reflexion"]');
   await alpha.fill("#rf-l1-0", "Wir haben die Prognose genommen und etwas mehr produziert.");
   await alpha.click('form[data-form="reflexion"] button[type=submit]');
   await alpha.locator(".chip.offen", { hasText: "gespeichert" }).first().waitFor();
 
   // Quartale 2–5 (Level 2–5): Lehrperson öffnet und wertet aus, Alpha entscheidet in Level 3 über Personal
   for (let q = 2; q <= 5; q++) {
-    await lehrer.click('[data-act="tabL"][data-tab="cockpit"]');
+    await lehrer.click('.tab[data-act="tabL"][data-tab="cockpit"]');
     await lehrer.click('[data-act="rundeOeffnen"]');
     await lehrer.locator("h2", { hasText: `Quartal ${q} läuft` }).waitFor();
     if (q === 3) {
@@ -132,28 +132,28 @@ test("Ein-Geräte-Modus: vom Einstieg bis zum Transfer", { skip: !pw && "Playwri
     await lehrer.locator("h2", { hasText: `Quartal ${q} ist ausgewertet` }).waitFor();
   }
   // Wirkungen prüfen: Personal +1 in Q3, Solaranlage in Q5
-  await alpha.click('[data-act="tabG"][data-tab="zentrale"]');
+  await alpha.click('.tab[data-act="tabG"][data-tab="zentrale"]');
   await alpha.locator("text=Solaranlage").first().waitFor({ timeout: 10000 });
 
   // Lehrperson sieht die Reflexion
-  await lehrer.click('[data-act="tabL"][data-tab="reflexion"]');
+  await lehrer.click('.tab[data-act="tabL"][data-tab="reflexion"]');
   await lehrer.locator("summary", { hasText: "Level 1" }).click();
   await lehrer.locator("text=Wir haben die Prognose genommen").waitFor();
 
   // Phase 3: Transfer
-  await lehrer.click('[data-act="tabL"][data-tab="cockpit"]');
+  await lehrer.click('.tab[data-act="tabL"][data-tab="cockpit"]');
   await lehrer.click('[data-act="spielBeenden"]');
   await dialogJa(lehrer, "Spiel beenden");
   await lehrer.locator("h2", { hasText: "Siegerehrung" }).waitFor();
-  await beta.click('[data-act="tabG"][data-tab="zentrale"]');
+  await beta.click('.tab[data-act="tabG"][data-tab="zentrale"]');
   await beta.locator("h2", { hasText: "Schlussbilanz" }).waitFor({ timeout: 10000 });
-  await beta.click('[data-act="tabG"][data-tab="reflexion"]');
+  await beta.click('.tab[data-act="tabG"][data-tab="reflexion"]');
   await beta.fill("#rf-transfer-0", "Auf Preis, Zucker und Verpackung.");
   await beta.click('form[data-form="reflexion"][data-teil="transfer"] button[type=submit]');
   await beta.locator("summary", { hasText: "Transfer" }).locator(".chip", { hasText: "gespeichert" }).waitFor();
 
   // Export
-  await lehrer.click('[data-act="tabL"][data-tab="verwaltung"]');
+  await lehrer.click('.tab[data-act="tabL"][data-tab="verwaltung"]');
   const [download] = await Promise.all([lehrer.waitForEvent("download"), lehrer.click('[data-act="exportCsv"]')]);
   assert.match(download.suggestedFilename(), /^voltage-testklasse-2b-resultate\.csv$/);
   const csv = fs.readFileSync(await download.path(), "utf8");
@@ -192,7 +192,7 @@ test("Demo und Lehrpersonen-Ansicht einer Gruppe", { skip: !pw && "Playwright ni
   await s.click('[data-act="demo"]');
   await s.locator("h2", { hasText: "Quartal 3 läuft" }).waitFor();
   for (const tab of ["ergebnisse", "rangliste", "eingaben", "reflexion", "regeln", "verwaltung", "cockpit"]) {
-    await s.click(`[data-act="tabL"][data-tab="${tab}"]`);
+    await s.click(`.tab[data-act="tabL"][data-tab="${tab}"]`);
     const breite = await s.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(breite <= 390, `kein horizontales Scrollen im Tab ${tab} (${breite}px)`);
   }

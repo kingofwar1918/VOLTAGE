@@ -74,7 +74,7 @@ test("Online-Modus mit drei Geräten", { skip: ohne, timeout: 240000 }, async ()
   // Quartal 1: beide geben ab, Lehrperson sieht es live
   await lehrer.click('[data-act="rundeOeffnen"]');
   for (const g of [g1, g2]) {
-    await g.locator('[data-act="tabG"][data-tab="entscheiden"]').click();
+    await g.locator('.tab[data-act="tabG"][data-tab="entscheiden"]').click();
     await g.locator("#planung").waitFor({ timeout: 15000 });
     await g.click('[data-act="abgeben"]');
     await g.locator(".hinweis.gut", { hasText: "Abgegeben um" }).waitFor();
@@ -82,13 +82,13 @@ test("Online-Modus mit drei Geräten", { skip: ohne, timeout: 240000 }, async ()
   await lehrer.locator("text=Abgaben: 2 von 2").waitFor({ timeout: 15000 });
   await lehrer.click('[data-act="auswerten"]');
   await lehrer.locator("h2", { hasText: "Quartal 1 ist ausgewertet" }).waitFor({ timeout: 20000 });
-  await g2.locator('[data-act="tabG"][data-tab="bericht"]').click();
+  await g2.locator('.tab[data-act="tabG"][data-tab="bericht"]').click();
   await g2.locator("h2", { hasText: "Quartalsbericht Q1" }).waitFor({ timeout: 15000 });
 
   // Quartal 2: Netzausfall bei Gruppe 1 – die Abgabe wird nachgeliefert
   await lehrer.click('[data-act="rundeOeffnen"]');
   for (const g of [g1, g2]) {
-    await g.locator('[data-act="tabG"][data-tab="entscheiden"]').click();
+    await g.locator('.tab[data-act="tabG"][data-tab="entscheiden"]').click();
     await g.locator("#planung").waitFor({ timeout: 15000 });
   }
   await g1.fill("#e-menge", "61000");
@@ -128,7 +128,7 @@ test("Online-Modus mit drei Geräten", { skip: ohne, timeout: 240000 }, async ()
   await g2.locator("#toast", { hasText: "kam zu spät" }).waitFor({ timeout: 20000 });
 
   // Spiel löschen: Gruppen landen auf der Startseite
-  await lehrer.click('[data-act="tabL"][data-tab="verwaltung"]');
+  await lehrer.click('.tab[data-act="tabL"][data-tab="verwaltung"]');
   await lehrer.click('[data-act="spielLoeschen"]');
   await dialogJa(lehrer, "Endgültig löschen");
   await g1.locator(".rolle", { hasText: "Gruppe" }).waitFor({ timeout: 15000 });

@@ -141,8 +141,8 @@ Die erste Fassung («Voltage – Energy-Drink-Tycoon») lief nur in der Claude-V
 ## Tests (für die Weiterentwicklung)
 
 ```bash
-node --test tests/                                  # Spielmodell; Browsertests, wenn Playwright installiert ist
-FIREBASE_EMULATOR_JAR=/pfad/firebase-database-emulator.jar node --test tests/   # zusätzlich Regeln und Online-Modus
+npm test                                            # Spielmodell; Browsertests, wenn Playwright installiert ist
+FIREBASE_EMULATOR_JAR=/pfad/firebase-database-emulator.jar npm test   # zusätzlich Regeln und Online-Modus
 ```
 
 - `spielmodell.test.mjs` prüft das Marktmodell: Kassenrechnung, Grenzen, unsinnige Eingaben, Ereignisse, Autopilot und Spielbalance.
