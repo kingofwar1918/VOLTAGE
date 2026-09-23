@@ -77,7 +77,7 @@ Die Daten liegen in einer kostenlosen **Firebase Realtime Database**. Die Lehrpe
 4. **Adresse kopieren:** oben in der Realtime Database, z.B. `https://voltage-7a-default-rtdb.europe-west1.firebasedatabase.app`.
 5. **In Voltage eintragen:** Lehrperson → «🌐 Online-Modus» → Adresse einfügen → «Testen und speichern». Erscheint «Verbindung klappt», ist alles bereit.
    *Alternative:* Die Adresse in `index.html` bei `KONFIG.firebaseUrl` eintragen. Dann kennen alle Geräte die Datenbank, und für die Klasse genügt der Spielcode.
-6. **Spiel erstellen:** «Neues Spiel» → «🌐 Online». Der Kontrollraum zeigt den **Spielcode** und einen **Link für die Klasse** (mit Kopierknopf).
+6. **Spiel erstellen:** «Neues Spiel» → «🌐 Online». Der Kontrollraum zeigt den **Spielcode**, einen **QR-Code** und den **Link für die Klasse**. Mit «📺 Für den Beamer» erscheinen Code und QR-Code gross. Die Gruppen scannen ihn mit der Kamera des Tablets und landen direkt beim Gründen ihrer Firma.
 
 #### App im Internet bereitstellen (GitHub Pages)
 
@@ -147,4 +147,5 @@ FIREBASE_EMULATOR_JAR=/pfad/firebase-database-emulator.jar node --test tests/   
 
 - `spielmodell.test.mjs` prüft das Marktmodell: Kassenrechnung, Grenzen, unsinnige Eingaben, Ereignisse, Autopilot und Spielbalance.
 - `e2e-lokal.test.mjs` spielt ein ganzes Spiel im Browser durch: Gründung, Start-Check, fünf Levels, Zurücknehmen, Reflexion, Transfer, Export und Neuladen.
-- `regeln.test.mjs` und `e2e-online.test.mjs` laufen gegen den offiziellen Firebase-Emulator mit den echten Regeln. Getestet werden drei Geräte, ein Netzausfall mit Nachliefern, ein zweites Gerät der Lehrperson und das Löschen.
+- `regeln.test.mjs` und `e2e-online.test.mjs` laufen gegen den offiziellen Firebase-Emulator mit den echten Regeln. Getestet werden drei Geräte, ein Netzausfall mit Nachliefern, eine verspätete Abgabe, ein zweites Gerät der Lehrperson und das Löschen.
+- `qr.test.mjs` liest die QR-Codes der App mit einem unabhängigen Leser (`npm install --no-save jsqr`).

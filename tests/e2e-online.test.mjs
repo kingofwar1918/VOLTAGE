@@ -54,6 +54,10 @@ test("Online-Modus mit drei Geräten", { skip: ohne, timeout: 240000 }, async ()
   const code = (await lehrer.textContent(".code")).trim();
   const link = (await lehrer.locator(".karte span.zahl").first().textContent()).trim();
   assert.ok(link.includes(`spiel=${code}`) && link.includes("db="), "Klassen-Link enthält Code und Datenbank");
+  assert.equal(await lehrer.locator(".karte svg.qr").count(), 1, "QR-Code im Cockpit");
+  await lehrer.click('[data-act="beamerZugang"]');
+  await lehrer.locator(".dialog.beamer .code", { hasText: code }).waitFor();
+  await lehrer.locator(".dialog.beamer button", { hasText: "Schliessen" }).click();
 
   // Zwei Gruppen auf eigenen Geräten (Tablet- und Handybreite)
   const g1 = await geraet(820), g2 = await geraet(390);

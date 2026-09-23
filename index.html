@@ -258,6 +258,9 @@ th button{background:none; border:none; font:inherit; color:inherit; text-transf
 .rolle .ic{font-size:2rem}
 .rolle b{font-family:var(--disp); font-size:1.2rem; text-transform:uppercase}
 @media (hover:hover){ .rolle:hover{border-color:var(--ink)} }
+.qr{display:block; max-width:100%; height:auto; border-radius:8px}
+.beamer{max-width:760px; align-items:center; text-align:center}
+.beamer .code{font-size:clamp(2.4rem,9vw,4.4rem)}
 .code{font-family:var(--mono); font-weight:900; font-size:clamp(1.8rem,7vw,2.6rem); letter-spacing:.18em; color:var(--ink); background:var(--raised); border:2px dashed var(--line-strong); border-radius:12px; padding:.2rem .8rem; display:inline-block}
 
 .dialog-hg{position:fixed; inset:0; background:rgba(7,10,20,.55); display:flex; align-items:center; justify-content:center; padding:20px; z-index:60}
@@ -894,6 +897,170 @@ async function kopieren(txt) {
   try { await navigator.clipboard.writeText(txt); toast("📋 Kopiert"); }
   catch (e) { toast("Kopieren nicht möglich – bitte von Hand markieren."); }
 }
+
+/*<QR>*/
+/* QR-Code-Erzeuger (Byte-Modus, Fehlerkorrektur M, Versionen 1–40), ohne externe Bibliothek.
+   Nach dem Verfahren der Norm ISO/IEC 18004, aufgebaut wie der quelloffene Generator von Nayuki. */
+const QR = (() => {
+  const ECC_PRO_BLOCK = [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28];
+  const BLOECKE = [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49];
+  const rohModule = (v) => {
+    let r = (16 * v + 128) * v + 64;
+    if (v >= 2) { const n = Math.floor(v / 7) + 2; r -= (25 * n - 10) * n - 55; if (v >= 7) r -= 36; }
+    return r;
+  };
+  const datenCodewoerter = (v) => Math.floor(rohModule(v) / 8) - ECC_PRO_BLOCK[v] * BLOECKE[v];
+  const mul = (x, y) => { let z = 0; for (let i = 7; i >= 0; i--) { z = (z << 1) ^ ((z >>> 7) * 0x11d); z ^= ((y >>> i) & 1) * x; } return z; };
+  function divisor(grad) {
+    const r = new Array(grad - 1).fill(0).concat([1]);
+    let wurzel = 1;
+    for (let i = 0; i < grad; i++) {
+      for (let j = 0; j < r.length; j++) { r[j] = mul(r[j], wurzel); if (j + 1 < r.length) r[j] ^= r[j + 1]; }
+      wurzel = mul(wurzel, 0x02);
+    }
+    return r;
+  }
+  function rest(daten, div) {
+    const r = div.map(() => 0);
+    for (const b of daten) { const f = b ^ r.shift(); r.push(0); div.forEach((c, i) => { r[i] ^= mul(c, f); }); }
+    return r;
+  }
+  function utf8(text) {
+    const out = [];
+    for (const ch of text) {
+      let c = ch.codePointAt(0);
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+      else if (c < 0x10000) out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+      else out.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 63), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+  function erzeuge(text) {
+    const bytes = utf8(String(text));
+    let v = 1;
+    for (; v <= 40; v++) if (4 + (v < 10 ? 8 : 16) + bytes.length * 8 <= datenCodewoerter(v) * 8) break;
+    if (v > 40) return null;
+    const bits = [];
+    const push = (wert, n) => { for (let i = n - 1; i >= 0; i--) bits.push((wert >>> i) & 1); };
+    push(4, 4); push(bytes.length, v < 10 ? 8 : 16); bytes.forEach((b) => push(b, 8));
+    const kap = datenCodewoerter(v) * 8;
+    push(0, Math.min(4, kap - bits.length));
+    push(0, (8 - bits.length % 8) % 8);
+    for (let p = 0xec; bits.length < kap; p ^= 0xec ^ 0x11) push(p, 8);
+    const daten = [];
+    for (let i = 0; i < bits.length; i += 8) daten.push(bits.slice(i, i + 8).reduce((a, b) => (a << 1) | b, 0));
+    // Fehlerkorrektur und Verschränkung der Blöcke
+    const nBl = BLOECKE[v], eccLen = ECC_PRO_BLOCK[v], roh = Math.floor(rohModule(v) / 8);
+    const kurz = nBl - roh % nBl, kurzLen = Math.floor(roh / nBl), div = divisor(eccLen), bloecke = [];
+    for (let i = 0, k = 0; i < nBl; i++) {
+      const d = daten.slice(k, k + kurzLen - eccLen + (i < kurz ? 0 : 1));
+      k += d.length;
+      const e = rest(d, div);
+      if (i < kurz) d.push(0);
+      bloecke.push(d.concat(e));
+    }
+    const cw = [];
+    for (let i = 0; i < bloecke[0].length; i++) bloecke.forEach((b, j) => { if (i !== kurzLen - eccLen || j >= kurz) cw.push(b[i]); });
+    // Funktionsmuster
+    const n = v * 4 + 17;
+    const m = Array.from({ length: n }, () => new Array(n).fill(false));
+    const fn = Array.from({ length: n }, () => new Array(n).fill(false));
+    const setze = (x, y, dunkel) => { m[y][x] = dunkel; fn[y][x] = true; };
+    for (let i = 0; i < n; i++) { setze(6, i, i % 2 === 0); setze(i, 6, i % 2 === 0); }
+    const finder = (x, y) => {
+      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+        const d = Math.max(Math.abs(dx), Math.abs(dy)), xx = x + dx, yy = y + dy;
+        if (xx >= 0 && xx < n && yy >= 0 && yy < n) setze(xx, yy, d !== 2 && d !== 4);
+      }
+    };
+    finder(3, 3); finder(n - 4, 3); finder(3, n - 4);
+    if (v > 1) {
+      const anz = Math.floor(v / 7) + 2, schritt = v === 32 ? 26 : Math.ceil((v * 4 + 4) / (anz * 2 - 2)) * 2;
+      const pos = [6];
+      for (let p = n - 7; pos.length < anz; p -= schritt) pos.splice(1, 0, p);
+      for (let i = 0; i < anz; i++) for (let j = 0; j < anz; j++) {
+        if ((i === 0 && j === 0) || (i === 0 && j === anz - 1) || (i === anz - 1 && j === 0)) continue;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) setze(pos[i] + dx, pos[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+      }
+    }
+    const formatBits = (maske) => {
+      const d = (0 << 3) | maske;   // Fehlerkorrektur M = 00
+      let r = d;
+      for (let i = 0; i < 10; i++) r = (r << 1) ^ ((r >>> 9) * 0x537);
+      return ((d << 10) | r) ^ 0x5412;
+    };
+    const setzeFormat = (maske) => {
+      const b = formatBits(maske), bit = (i) => ((b >>> i) & 1) === 1;
+      for (let i = 0; i <= 5; i++) setze(8, i, bit(i));
+      setze(8, 7, bit(6)); setze(8, 8, bit(7)); setze(7, 8, bit(8));
+      for (let i = 9; i < 15; i++) setze(14 - i, 8, bit(i));
+      for (let i = 0; i < 8; i++) setze(n - 1 - i, 8, bit(i));
+      for (let i = 8; i < 15; i++) setze(8, n - 15 + i, bit(i));
+      setze(8, n - 8, true);
+    };
+    setzeFormat(0);
+    if (v >= 7) {
+      let r = v;
+      for (let i = 0; i < 12; i++) r = (r << 1) ^ ((r >>> 11) * 0x1f25);
+      const b = (v << 12) | r;
+      for (let i = 0; i < 18; i++) { const bit = ((b >>> i) & 1) === 1, a = n - 11 + i % 3, c = Math.floor(i / 3); setze(a, c, bit); setze(c, a, bit); }
+    }
+    // Daten im Zickzack einsetzen
+    let i = 0;
+    for (let rechts = n - 1; rechts >= 1; rechts -= 2) {
+      if (rechts === 6) rechts = 5;
+      for (let vert = 0; vert < n; vert++) for (let j = 0; j < 2; j++) {
+        const x = rechts - j, hoch = ((rechts + 1) & 2) === 0, y = hoch ? n - 1 - vert : vert;
+        if (!fn[y][x] && i < cw.length * 8) { m[y][x] = ((cw[i >>> 3] >>> (7 - (i & 7))) & 1) === 1; i++; }
+      }
+    }
+    // Maske wählen (Strafpunkte nach Norm, vereinfacht auf Läufe, Blöcke und Balance)
+    const maskiere = (k) => {
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        if (fn[y][x]) continue;
+        const inv = [(x + y) % 2 === 0, y % 2 === 0, x % 3 === 0, (x + y) % 3 === 0, (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0,
+          (x * y) % 2 + (x * y) % 3 === 0, ((x * y) % 2 + (x * y) % 3) % 2 === 0, (((x + y) % 2) + (x * y) % 3) % 2 === 0][k];
+        if (inv) m[y][x] = !m[y][x];
+      }
+    };
+    const strafe = () => {
+      let s = 0, dunkel = 0;
+      for (let y = 0; y < n; y++) {
+        let lx = 1, ly = 1;
+        for (let x = 0; x < n; x++) {
+          if (m[y][x]) dunkel++;
+          if (x > 0) {
+            lx = m[y][x] === m[y][x - 1] ? lx + 1 : 1; if (lx === 5) s += 3; else if (lx > 5) s++;
+            ly = m[x][y] === m[x - 1][y] ? ly + 1 : 1; if (ly === 5) s += 3; else if (ly > 5) s++;
+          }
+          if (x < n - 1 && y < n - 1 && m[y][x] === m[y][x + 1] && m[y][x] === m[y + 1][x] && m[y][x] === m[y + 1][x + 1]) s += 3;
+        }
+      }
+      return s + Math.floor(Math.abs(dunkel * 20 - n * n * 10) / (n * n)) * 10;
+    };
+    let beste = 0, besteStrafe = Infinity;
+    for (let k = 0; k < 8; k++) {
+      maskiere(k); setzeFormat(k);
+      const st = strafe();
+      if (st < besteStrafe) { besteStrafe = st; beste = k; }
+      maskiere(k);
+    }
+    maskiere(beste); setzeFormat(beste);
+    return m;
+  }
+  // Als SVG: immer dunkel auf weiss, mit Ruhezone
+  function svg(text, groesse) {
+    const m = erzeuge(text);
+    if (!m) return "";
+    const n = m.length, rand = 4, gesamt = n + 2 * rand;
+    let pfad = "";
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (m[y][x]) pfad += `M${x + rand} ${y + rand}h1v1h-1z`;
+    return `<svg class="qr" width="${groesse || 220}" height="${groesse || 220}" viewBox="0 0 ${gesamt} ${gesamt}" shape-rendering="crispEdges" role="img" aria-label="QR-Code"><rect width="${gesamt}" height="${gesamt}" fill="#fff"/><path d="${pfad}" fill="#000"/></svg>`;
+  }
+  return { erzeuge, svg };
+})();
+/*</QR>*/
 
 /* =========================================================================
    5. SPIELMODELL – reine Rechenfunktionen, kennen nur DATEN
@@ -2468,8 +2635,10 @@ function lehrerCockpit() {
   const link = klassenLink();
   const zugang = `<h2>📲 Zugang für die Gruppen</h2>
     ${App.sitzung.modus === "online" ? `<p>Spielcode: <span class="code">${esc(App.sitzung.code)}</span></p>
-      ${link ? `<p class="klein" style="overflow-wrap:anywhere"><span class="zahl">${esc(link)}</span></p><div class="zeile"><button class="knopf zweit klein" data-act="linkKopieren"><span>📋 Link kopieren</span></button></div>` : ""}
-      <p class="klein gedaempft">Die Gruppen öffnen den Link oder die App und geben den Code ein.</p>`
+      ${link ? `<div class="zeile" style="align-items:flex-start">${QR.svg(link, 150)}<div class="stapel" style="gap:8px; flex:1; min-width:180px">
+        <p class="klein" style="overflow-wrap:anywhere"><span class="zahl">${esc(link)}</span></p>
+        <div class="zeile"><button class="knopf zweit klein" data-act="linkKopieren"><span>📋 Link kopieren</span></button><button class="knopf zweit klein" data-act="beamerZugang"><span>📺 Für den Beamer</span></button></div></div></div>` : ""}
+      <p class="klein gedaempft">Die Gruppen scannen den QR-Code mit der Kamera, öffnen den Link oder geben in der App den Spielcode ein.</p>`
     : `<p>Spielcode: <span class="code">${esc(App.sitzung.code)}</span></p>
       <p class="klein">📱 <b>Ein-Geräte-Modus:</b> Die Gruppen melden sich auf <b>diesem Gerät</b> an (Startseite → Gruppe) – oder ihr erfasst ihre Entscheidungsblätter über «Als Gruppe öffnen».</p>
       <div class="zeile"><button class="knopf zweit klein" data-act="druckBlatt"><span>🖨️ Entscheidungsblatt</span></button></div>`}`;
@@ -3198,6 +3367,18 @@ const AKTIONEN = {
   druckKlasse() { druckeHtml(klassenbericht()); },
   drucken() { try { window.print(); } catch (e) { toast("Drucken ist in dieser Ansicht nicht möglich."); } },
   linkKopieren() { kopieren(klassenLink()); },
+  beamerZugang() {
+    const link = klassenLink();
+    const hg = document.createElement("div");
+    hg.className = "dialog-hg";
+    hg.innerHTML = `<div class="dialog beamer" role="dialog" aria-modal="true" aria-label="Zugang für die Gruppen">
+      <h2>${esc(App.spiel ? App.spiel.name : "Voltage")}</h2>${QR.svg(link, 360)}
+      <p>Spielcode</p><span class="code">${esc(App.sitzung.code)}</span>
+      <p class="klein gedaempft">Kamera auf den QR-Code richten – oder Voltage öffnen, «Gruppe» wählen und den Code eingeben.</p>
+      <button class="knopf" data-w="0"><span>Schliessen</span></button></div>`;
+    hg.addEventListener("click", (e) => { if (e.target === hg || e.target.closest("[data-w]")) hg.remove(); });
+    document.body.append(hg);
+  },
   ergebnisRunde(el) { App.ergebnisRunde = num(el.dataset.runde); zeichne(); },
   berichtRunde(el) { App.berichtRunde = num(el.dataset.runde); zeichne(); },
   schritt(el) {
