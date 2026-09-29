@@ -8,7 +8,7 @@ Der Aufbau lehnt sich an die Lernumgebung «Wirtschaft entdecken» an: **Einstie
 - **Zwei Spielmodi:** alles auf einem Gerät (ohne Einrichtung) oder jede Gruppe auf ihrem eigenen Tablet (Online-Modus mit Firebase).
 - **Als App installierbar** (iPad: Teilen → «Zum Home-Bildschirm»).
 
-> **Stand 29. September 2026:** Die App ist fertig und automatisch getestet (30 Tests: Spielmodell, ganze Spiele im Browser, Online-Modus gegen den Firebase-Emulator). Damit die Klasse spielen kann, fehlen noch einige **einmalige Schritte ausserhalb des Codes**: die App im Internet bereitstellen und – für den Online-Modus – eine eigene Datenbank anlegen. Sie stehen unten unter **[Noch offene Schritte](#noch-offene-schritte)**, Klick für Klick und zum Abhaken.
+> **Stand 29. September 2026:** Die App ist fertig und automatisch getestet (33 Tests: Spielmodell, ganze Spiele im Browser, Online-Modus gegen den Firebase-Emulator). Der Zweig `main` und die Firebase-Datenbank sind angelegt, und die Adresse der Datenbank ist in der App eingetragen. Offen sind vor allem noch **GitHub Pages**, die **Prüfung der Regeln** und ein **Probelauf** – siehe **[Noch offene Schritte](#noch-offene-schritte)**, Klick für Klick und zum Abhaken.
 
 ---
 
@@ -41,17 +41,17 @@ Demo-PINs: Lehrperson `demo`, Gruppen `2468`. Die Demo bleibt auf dem Gerät und
 
 Diese Schritte lassen sich nicht im Code erledigen – sie brauchen das GitHub-Konto, dem das Repository gehört, bzw. ein Google-Konto. Die meisten sind **einmalig**; das Firebase-Projekt dient danach allen weiteren Klassen.
 
-| Nr. | Schritt | 📱 Ein Gerät | 🌐 Online | Dauer |
-|---|---|---|---|---|
-| 1 | [Zweig `main` als Standard festlegen](#schritt-1--zweig-main-als-standard-festlegen) | empfohlen | empfohlen | 1 Min. |
-| 2 | [GitHub Pages einschalten](#schritt-2--github-pages-einschalten) | empfohlen¹ | nötig | 5 Min. |
-| 3 | [Firebase-Datenbank anlegen](#schritt-3--firebase-datenbank-anlegen) | – | nötig | 15 Min. |
-| 4 | [Datenbank-Adresse in Voltage eintragen](#schritt-4--datenbank-adresse-in-voltage-eintragen) | – | nötig | 5 Min. |
-| 5 | [Regeln prüfen](#schritt-5--regeln-prüfen) | – | nötig | 2 Min. |
-| 6 | [Datenschutz klären](#schritt-6--datenschutz-klären) | – | nötig | – |
-| 7 | [Probelauf im Schulzimmer](#schritt-7--probelauf-im-schulzimmer) | empfohlen | nötig | 20 Min. |
-| 8 | [Unterricht vorbereiten](#schritt-8--unterricht-vorbereiten) | nötig | nötig | 30 Min. |
-| 9 | [Nach der Einheit: sichern und löschen](#schritt-9--nach-der-einheit-sichern-und-löschen) | nötig | nötig | 10 Min. |
+| Nr. | Schritt | Stand | 📱 Ein Gerät | 🌐 Online | Dauer |
+|---|---|---|---|---|---|
+| 1 | [Zweig `main` als Standard festlegen](#schritt-1--zweig-main-als-standard-festlegen) | `main` angelegt, Standard offen | empfohlen | empfohlen | 1 Min. |
+| 2 | [GitHub Pages einschalten](#schritt-2--github-pages-einschalten) | offen | empfohlen¹ | nötig | 5 Min. |
+| 3 | [Firebase-Datenbank anlegen](#schritt-3--firebase-datenbank-anlegen) | ✅ erledigt | – | nötig | 15 Min. |
+| 4 | [Datenbank-Adresse in Voltage eintragen](#schritt-4--datenbank-adresse-in-voltage-eintragen) | ✅ erledigt (Variante B) | – | nötig | 5 Min. |
+| 5 | [Regeln prüfen](#schritt-5--regeln-prüfen) | offen | – | nötig | 2 Min. |
+| 6 | [Datenschutz klären](#schritt-6--datenschutz-klären) | offen | – | nötig | – |
+| 7 | [Probelauf im Schulzimmer](#schritt-7--probelauf-im-schulzimmer) | offen | empfohlen | nötig | 20 Min. |
+| 8 | [Unterricht vorbereiten](#schritt-8--unterricht-vorbereiten) | offen | nötig | nötig | 30 Min. |
+| 9 | [Nach der Einheit: sichern und löschen](#schritt-9--nach-der-einheit-sichern-und-löschen) | offen | nötig | nötig | 10 Min. |
 
 ¹ Am Computer läuft der Ein-Geräte-Modus auch per Doppelklick auf `index.html`. Auf dem iPad lässt sich die Datei nicht direkt öffnen – dort braucht es den GitHub-Pages-Link.
 
@@ -93,11 +93,13 @@ Nur nötig, wenn jede Gruppe auf ihrem eigenen Tablet spielt. Voraussetzung ist 
 
 #### Schritt 3 · Firebase-Datenbank anlegen
 
+✅ **Erledigt am 29. September 2026:** Die Datenbank `voltage-wirtschaftsspiel` ist angelegt, Standort europe-west1. Ob die Regeln aus 3c aktiv sind, zeigen «Verbindung testen» (Schritt 4) und die Probe in Schritt 5.
+
 **3a · Projekt erstellen**
 
 1. <https://console.firebase.google.com> öffnen und mit dem Google-Konto anmelden.
 2. **«Projekt erstellen»** anklicken (je nach Version auch «Projekt hinzufügen» oder «Mit einem Firebase-Projekt beginnen»; englisch *Create a project*).
-3. Einen Namen eingeben, z.B. `voltage-schule`, den Bedingungen zustimmen → **«Weiter»**.
+3. Einen Namen eingeben, z.B. `voltage-wirtschaftsspiel`, den Bedingungen zustimmen → **«Weiter»**.
 4. Zusatzangebote wie **Google Analytics** oder KI-Hilfe **ausschalten**. Voltage braucht sie nicht, und sie erzeugen nur zusätzliche Datenflüsse.
 5. **«Projekt erstellen»** → warten → **«Weiter»**.
 
@@ -120,10 +122,10 @@ Die Regeln bewirken: Ein Spiel lässt sich nur mit seinem Spielcode lesen und sc
 
 **3d · Adresse kopieren**
 
-Im Tab **«Daten»** (*Data*) steht oben die Adresse der Datenbank, zum Beispiel:
+Im Tab **«Daten»** (*Data*) steht oben die Adresse der Datenbank, hier:
 
 ```text
-https://voltage-schule-default-rtdb.europe-west1.firebasedatabase.app
+https://voltage-wirtschaftsspiel-default-rtdb.europe-west1.firebasedatabase.app
 ```
 
 Diese Adresse kopieren; sie wird in Schritt 4 gebraucht.
@@ -132,13 +134,15 @@ Diese Adresse kopieren; sie wird in Schritt 4 gebraucht.
 
 #### Schritt 4 · Datenbank-Adresse in Voltage eintragen
 
+✅ **Erledigt am 29. September 2026 (Variante B):** In `index.html` ist `https://voltage-wirtschaftsspiel-default-rtdb.europe-west1.firebasedatabase.app` eingetragen. Wirksam wird das, sobald die Änderung in `main` ist und GitHub Pages sie veröffentlicht hat (Schritt 2).
+
 Es gibt zwei Wege. **Variante B** ist bequemer, wenn Voltage regelmässig eingesetzt wird.
 
 **Variante A – in der App, ohne Code**
 
 1. Voltage über den GitHub-Pages-Link öffnen → **«Lehrperson»** → **«🌐 Online-Modus»**.
 2. Die Adresse ins Feld **«Adresse der Datenbank»** einfügen → **«Testen und speichern»**.
-3. Erscheint **«✅ Verbindung klappt. Der Online-Modus ist eingerichtet.»**, ist alles bereit.
+3. Erscheint **«✅ Verbindung klappt, die Regeln greifen. Der Online-Modus ist eingerichtet.»**, ist alles bereit.
 
 Die Adresse ist dann **nur auf diesem Gerät** gespeichert. Die Gruppen erhalten sie automatisch über den **QR-Code bzw. den Klassen-Link** im Kontrollraum. Wichtig: Tippen die Gruppen nur den Spielcode ein, findet ihr Tablet das Spiel nicht – sie brauchen den QR-Code oder den Link. Ein zweites Gerät der Lehrperson braucht die Adresse ebenfalls (dieselben Schritte).
 
@@ -150,25 +154,26 @@ Die Adresse ist dann **nur auf diesem Gerät** gespeichert. Die Gruppen erhalten
 
    ```js
    const KONFIG = {
-     firebaseUrl: "https://voltage-schule-default-rtdb.europe-west1.firebasedatabase.app",
+     firebaseUrl: "https://voltage-wirtschaftsspiel-default-rtdb.europe-west1.firebasedatabase.app",
    ```
 
 4. **«Commit changes…»** → **«Commit directly to the main branch»** → **«Commit changes»**.
 5. Nach einigen Minuten kennen alle Geräte die Datenbank, und für die Klasse genügt der Spielcode.
 
-**Kontrolle:** Voltage neu laden → «Lehrperson» → «🌐 Online-Modus» zeigt **«✅ Die Datenbank ist fest in der App eingetragen»**. Unter «＋ Neues Spiel erstellen» ist die Option **«🌐 Online»** wählbar.
+**Kontrolle:** Voltage neu laden → «Lehrperson» → «🌐 Online-Modus» zeigt **«✅ Die Datenbank ist fest in der App eingetragen»**. Dort **«Verbindung testen»** anklicken; erwartet wird **«✅ Verbindung klappt, die Regeln greifen.»** Unter «＋ Neues Spiel erstellen» ist **«🌐 Online»** jetzt vorgewählt.
 
 Die Adresse ist damit öffentlich im Repository sichtbar. Das ist in Ordnung: Geschützt wird über die Regeln – Spiele lassen sich nur mit ihrem Spielcode öffnen und nicht auflisten.
 
 #### Schritt 5 · Regeln prüfen
 
-Zwei Minuten, die sich lohnen. Die Meldung «✅ Verbindung klappt» aus Schritt 4 zeigt, dass die Voltage-Regeln aktiv sind. Diese Probe zeigt, dass alles andere gesperrt bleibt:
+Zwei Minuten, die sich lohnen. «Verbindung testen» bzw. «Testen und speichern» aus Schritt 4 prüft zweierlei: Spiele müssen erreichbar sein, und der Rest der Datenbank muss gesperrt sein. Die Probe von Hand bestätigt die Sperre unabhängig von der App:
 
 1. Ein **privates Browserfenster** öffnen (Chrome: Ctrl+Shift+N, Safari am Mac: Cmd+Shift+N).
-2. Die Adresse der Datenbank mit `/.json` am Ende aufrufen, zum Beispiel:
-   `https://voltage-schule-default-rtdb.europe-west1.firebasedatabase.app/.json`
-3. Erwartet wird: `"error" : "Permission denied"`.
-4. Dasselbe mit `/voltage/spiele.json` und mit `/voltage/lehrer.json` am Ende – ebenfalls «Permission denied».
+2. Diese drei Adressen aufrufen:
+   - <https://voltage-wirtschaftsspiel-default-rtdb.europe-west1.firebasedatabase.app/.json>
+   - <https://voltage-wirtschaftsspiel-default-rtdb.europe-west1.firebasedatabase.app/voltage/spiele.json>
+   - <https://voltage-wirtschaftsspiel-default-rtdb.europe-west1.firebasedatabase.app/voltage/lehrer.json>
+3. Erwartet wird jedes Mal: `"error" : "Permission denied"`.
 
 Erscheinen stattdessen Daten oder `null`, sind die Regeln nicht aktiv. Dann Schritt 3c wiederholen und «Veröffentlichen» nicht vergessen.
 
@@ -271,9 +276,10 @@ Freiwillig: In der Firebase-Konsole unter «Daten» → `voltage` → `lehrer` d
 - [x] Zweig `main` angelegt
 - [ ] `main` als Standardzweig festgelegt (Schritt 1)
 - [ ] GitHub Pages eingeschaltet, Link getestet und als Lesezeichen gespeichert (Schritt 2)
-- [ ] Firebase-Projekt mit Realtime Database, Standort europe-west1, gesperrter Modus (Schritt 3)
+- [x] Firebase-Projekt mit Realtime Database, Standort europe-west1 (Schritt 3)
 - [ ] Regeln aus `firebase/regeln.json` **veröffentlicht**, nicht nur eingetippt (Schritt 3c)
-- [ ] Datenbank-Adresse eingetragen, Meldung «Verbindung klappt» (Schritt 4)
+- [x] Datenbank-Adresse fest in `index.html` eingetragen (Schritt 4)
+- [ ] Nach dem Veröffentlichen: «Verbindung testen» zeigt «✅ Verbindung klappt, die Regeln greifen.» (Schritt 4)
 - [ ] Probe im privaten Fenster ergibt «Permission denied» (Schritt 5)
 - [ ] Einsatz mit der Schulleitung geklärt (Schritt 6)
 
@@ -308,9 +314,18 @@ Freiwillig: In der Firebase-Konsole unter «Daten» → `voltage` → `lehrer` d
 - WLAN prüfen. Abgaben gehen nicht verloren: Das Tablet speichert sie und liefert sie automatisch nach.
 - Klappt es im ganzen Schulnetz nicht, filtert es vielleicht die Adresse `firebasedatabase.app`. Die ICT-Verantwortlichen fragen, ob sie freigegeben werden kann.
 
-**«❌ Zugriff verweigert …» beim Einrichten**
+**«❌ Zugriff verweigert …» bei «Verbindung testen» oder beim Einrichten**
 
 - Die Regeln sind nicht veröffentlicht oder nicht vollständig eingefügt → Schritt 3c. Der oberste Pfad in den Regeln muss `voltage` heissen.
+
+**«⚠️ Die ganze Datenbank ist für alle lesbar …»**
+
+- Die Datenbank läuft im Testmodus oder mit offenen Regeln. Sofort Schritt 3c ausführen und «Veröffentlichen» – bis dahin kann jede Person mit der Adresse alles lesen und ändern.
+
+**Beim Erstellen eines Spiels: «Keine Verbindung zur Online-Datenbank …»**
+
+- WLAN prüfen. Filtert das Schulnetz die Adresse `firebasedatabase.app`, die ICT-Verantwortlichen um Freigabe bitten.
+- Für diese Lektion **«📱 Ein Gerät»** wählen – das funktioniert ohne Internet.
 
 **«❌ Datenbank nicht gefunden – stimmt die Adresse?»**
 
@@ -445,7 +460,7 @@ Technische Einstellungen stehen direkt davor im Block `KONFIG`:
 
 | Wert | Bedeutung |
 |---|---|
-| `firebaseUrl` | Adresse der Datenbank (siehe Schritt 4, Variante B) |
+| `firebaseUrl` | Adresse der Datenbank, hier `voltage-wirtschaftsspiel` (siehe Schritt 4). Wer Voltage für eine andere Schule kopiert, trägt die eigene ein oder lässt das Feld leer. |
 | `projekt` | oberster Pfad in der Datenbank; muss zu den Regeln passen (`voltage`) |
 | `taktMs`, `taktLokalMs` | wie oft die App abgleicht (Millisekunden) |
 
@@ -487,5 +502,7 @@ FIREBASE_EMULATOR_JAR=/pfad/firebase-database-emulator.jar npm test   # zusätzl
 - `spielmodell.test.mjs` prüft das Marktmodell: Kassenrechnung, Grenzen, unsinnige Eingaben, Ereignisse, Autopilot und Spielbalance.
 - `e2e-lokal.test.mjs` spielt ein ganzes Spiel im Browser durch: Gründung, Start-Check, fünf Levels, Zurücknehmen, Reflexion, Transfer, Export und Neuladen.
 - `e2e-befunde.test.mjs` sichert behobene Fehler ab: Entwürfe gegenüber neueren Abgaben, manipulierte Resultate, Sicherung in ein anderes Spiel, Sitzungen pro Tab, Kündigungen in der Planungshilfe, fremde Datenbank-Links, Ereignisse, offene Abschnitte und Reflexionsentwürfe.
-- `regeln.test.mjs` und `e2e-online.test.mjs` laufen gegen den offiziellen Firebase-Emulator mit den echten Regeln. Getestet werden drei Geräte, ein Netzausfall mit Nachliefern, eine verspätete Abgabe, ein zweites Gerät der Lehrperson und das Löschen.
+- `regeln.test.mjs` und `e2e-online.test.mjs` laufen gegen den offiziellen Firebase-Emulator mit den echten Regeln. Getestet werden drei Geräte, ein Netzausfall mit Nachliefern, eine verspätete Abgabe, ein zweites Gerät der Lehrperson, das Löschen, eine fest eingetragene Datenbank (Beitritt nur mit dem Spielcode) und der Verbindungstest, der fehlende und offene Regeln erkennt.
+- `konfig.test.mjs` prüft, dass die eingetragene Datenbank-Adresse gültig ist und `projekt` zu den Regeln passt.
+- Die Browsertests berühren nie die echte Datenbank: Der Testserver liefert `index.html` mit leerer bzw. auf den Emulator zeigender Adresse aus.
 - `qr.test.mjs` liest die QR-Codes der App mit einem unabhängigen Leser (`npm install --no-save jsqr`).

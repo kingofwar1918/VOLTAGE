@@ -25,8 +25,11 @@ export function freierPort() {
   return new Promise((ok) => { const s = net.createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => ok(p)); }); });
 }
 
-// Statischer Webserver für die App
-export async function starteWebserver() {
+// Statischer Webserver für die App. index.html wird mit einer eigenen Datenbank-Adresse
+// ausgeliefert (Standard: leer, sonst z.B. die des Emulators) – so berühren die Tests nie
+// die echte Datenbank, die in KONFIG.firebaseUrl eingetragen ist.
+const KONFIG_URL = /(\n\s*firebaseUrl:\s*)"[^"]*"/;
+export async function starteWebserver({ firebaseUrl = "" } = {}) {
   const port = await freierPort();
   const typen = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".webmanifest": "application/manifest+json", ".svg": "image/svg+xml", ".png": "image/png" };
   const server = http.createServer((req, res) => {
@@ -35,6 +38,13 @@ export async function starteWebserver() {
     if (!datei.startsWith(WURZEL)) { res.writeHead(403); res.end(); return; }
     if (fs.existsSync(datei) && fs.statSync(datei).isDirectory()) datei = path.join(datei, "index.html");
     if (!fs.existsSync(datei)) { res.writeHead(404); res.end("nicht gefunden"); return; }
+    if (datei === APP) {
+      const html = fs.readFileSync(datei, "utf8");
+      if (!KONFIG_URL.test(html)) { res.writeHead(500); res.end("KONFIG.firebaseUrl nicht gefunden"); return; }
+      res.writeHead(200, { "Content-Type": typen[".html"] });
+      res.end(html.replace(KONFIG_URL, (_, vor) => vor + JSON.stringify(firebaseUrl)));
+      return;
+    }
     res.writeHead(200, { "Content-Type": typen[path.extname(datei)] || "application/octet-stream" });
     fs.createReadStream(datei).pipe(res);
   });
@@ -69,11 +79,11 @@ export async function starteEmulator() {
 
 /* Vermittler zwischen App und Emulator: hängt den Namespace an (?ns=…),
    damit die App mit einer gewöhnlichen Datenbank-Adresse arbeiten kann. */
-export async function starteVermittler(emulator) {
+export async function starteVermittler(emulator, namespace = NAMESPACE) {
   const port = await freierPort();
   const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, "http://x");
-    u.searchParams.set("ns", NAMESPACE);
+    u.searchParams.set("ns", namespace);
     const teile = [];
     for await (const t of req) teile.push(t);
     const kopf = {};
