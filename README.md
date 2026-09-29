@@ -8,7 +8,7 @@ Der Aufbau lehnt sich an die Lernumgebung «Wirtschaft entdecken» an: **Einstie
 - **Zwei Spielmodi:** alles auf einem Gerät (ohne Einrichtung) oder jede Gruppe auf ihrem eigenen Tablet (Online-Modus mit Firebase).
 - **Als App installierbar** (iPad: Teilen → «Zum Home-Bildschirm»).
 
-> **Stand 24. September 2026:** Die App ist fertig und automatisch getestet (30 Tests: Spielmodell, ganze Spiele im Browser, Online-Modus gegen den Firebase-Emulator). Damit die Klasse spielen kann, fehlen noch einige **einmalige Schritte ausserhalb des Codes**: die App im Internet bereitstellen und – für den Online-Modus – eine eigene Datenbank anlegen. Sie stehen unten unter **[Noch offene Schritte](#noch-offene-schritte)**, Klick für Klick und zum Abhaken.
+> **Stand 29. September 2026:** Die App ist fertig und automatisch getestet (30 Tests: Spielmodell, ganze Spiele im Browser, Online-Modus gegen den Firebase-Emulator). Damit die Klasse spielen kann, fehlen noch einige **einmalige Schritte ausserhalb des Codes**: die App im Internet bereitstellen und – für den Online-Modus – eine eigene Datenbank anlegen. Sie stehen unten unter **[Noch offene Schritte](#noch-offene-schritte)**, Klick für Klick und zum Abhaken.
 
 ---
 
@@ -43,7 +43,7 @@ Diese Schritte lassen sich nicht im Code erledigen – sie brauchen das GitHub-K
 
 | Nr. | Schritt | 📱 Ein Gerät | 🌐 Online | Dauer |
 |---|---|---|---|---|
-| 1 | [Zweig `main` anlegen](#schritt-1--zweig-main-anlegen) | empfohlen | nötig | 2 Min. |
+| 1 | [Zweig `main` als Standard festlegen](#schritt-1--zweig-main-als-standard-festlegen) | empfohlen | empfohlen | 1 Min. |
 | 2 | [GitHub Pages einschalten](#schritt-2--github-pages-einschalten) | empfohlen¹ | nötig | 5 Min. |
 | 3 | [Firebase-Datenbank anlegen](#schritt-3--firebase-datenbank-anlegen) | – | nötig | 15 Min. |
 | 4 | [Datenbank-Adresse in Voltage eintragen](#schritt-4--datenbank-adresse-in-voltage-eintragen) | – | nötig | 5 Min. |
@@ -57,19 +57,17 @@ Diese Schritte lassen sich nicht im Code erledigen – sie brauchen das GitHub-K
 
 Die Oberfläche von GitHub ist englisch; die Beschriftungen sind darum unten englisch zitiert. Die Firebase-Konsole erscheint in der Sprache des Google-Kontos; in Klammern steht jeweils die englische Bezeichnung.
 
-### Schritt 1 · Zweig `main` anlegen
+### Schritt 1 · Zweig `main` als Standard festlegen
 
-**Warum:** Im Repository gibt es bisher nur den Arbeitszweig `claude/voltage-wirtschaftsspiel-app-3sh099`, und er ist zurzeit auch der Standardzweig. Übersichtlicher ist ein fester Hauptzweig `main`: Dort liegt immer die Version, die die Klasse sieht.
+✅ **Erledigt am 29. September 2026:** Der Zweig `main` ist angelegt. Er enthält denselben Stand wie der Arbeitszweig `claude/voltage-wirtschaftsspiel-app-3sh099`. In `main` liegt künftig immer die Version, die die Klasse sieht.
+
+**Noch offen:** `main` als Standardzweig festlegen. Dann zeigt die Startseite des Repositorys diesen Zweig, und neue Pull Requests zielen automatisch auf `main`. Für GitHub Pages ist das nicht zwingend, aber übersichtlicher.
 
 1. <https://github.com/kingofwar1918/VOLTAGE> öffnen und mit dem eigenen GitHub-Konto anmelden.
-2. Links über der Dateiliste auf die **Zweig-Auswahl** klicken. Sie zeigt `claude/voltage-wirtschaftsspiel-app-3sh099`.
-3. Ins Suchfeld `main` tippen und **«Create branch main from claude/voltage-wirtschaftsspiel-app-3sh099»** anklicken.
-4. Oben im Repository **Settings** → links **General** → Abschnitt **«Default branch»** → Symbol mit den zwei Pfeilen (⇄) → `main` wählen → **«Update»** → **«I understand, update the default branch»**.
+2. Oben im Repository **Settings** → links **General** → Abschnitt **«Default branch»** → Symbol mit den zwei Pfeilen (⇄) → `main` wählen → **«Update»** → **«I understand, update the default branch»**.
 
 **Kontrolle:** Die Startseite des Repositorys zeigt jetzt `main` an.
 
-> **Abkürzung:** Wer diesen Schritt überspringt, wählt in Schritt 2 direkt den Zweig `claude/voltage-wirtschaftsspiel-app-3sh099`. Das funktioniert genauso, ist aber weniger übersichtlich.
->
 > **Später, bei neuen Versionen:** Änderungen entstehen auf einem eigenen Zweig und kommen über einen Pull Request nach `main`: **Pull requests → New pull request** → oben `base: main` und `compare: <neuer Zweig>` wählen → **Create pull request** → **Merge pull request**. GitHub Pages veröffentlicht die neue Version danach von selbst.
 
 ### Schritt 2 · GitHub Pages einschalten
@@ -270,7 +268,8 @@ Freiwillig: In der Firebase-Konsole unter «Daten» → `voltage` → `lehrer` d
 
 **Einmalig**
 
-- [ ] Zweig `main` angelegt und als Standard gesetzt (Schritt 1)
+- [x] Zweig `main` angelegt
+- [ ] `main` als Standardzweig festgelegt (Schritt 1)
 - [ ] GitHub Pages eingeschaltet, Link getestet und als Lesezeichen gespeichert (Schritt 2)
 - [ ] Firebase-Projekt mit Realtime Database, Standort europe-west1, gesperrter Modus (Schritt 3)
 - [ ] Regeln aus `firebase/regeln.json` **veröffentlicht**, nicht nur eingetippt (Schritt 3c)
