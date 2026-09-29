@@ -346,7 +346,7 @@ dl.lexikon dd{margin:0}
    eurer Firebase Realtime Database eintragen – Anleitung im README.
    ========================================================================= */
 const KONFIG = {
-  firebaseUrl: "",          // z.B. "https://voltage-7a-default-rtdb.europe-west1.firebasedatabase.app"
+  firebaseUrl: "https://voltage-wirtschaftsspiel-default-rtdb.europe-west1.firebasedatabase.app",   // Firebase-Datenbank der Schule (leer: Adresse in der App eintragen)
   projekt: "voltage",       // oberster Pfad in der Datenbank – muss zu den Regeln passen
   taktMs: 4000,             // Abgleich im Online-Modus (Millisekunden)
   taktLokalMs: 1500         // Abgleich im Ein-Geräte-Modus
@@ -793,6 +793,27 @@ function onlineAdresse() {
   const aus = [KONFIG.firebaseUrl, Sitzungsspeicher.lies("voltage:dbLink", ""), Lokal.lies("voltage:firebaseUrl", "")];
   for (const u of aus) if (gueltigeDbUrl(u)) return String(u).trim().replace(/\/+$/, "");
   return "";
+}
+// Prüft eine Datenbank: Spiele müssen lesbar sein, die Wurzel gesperrt (sonst gelten die Regeln nicht)
+async function datenbankPruefen(url) {
+  const alt = FirebaseDB.basis;
+  FirebaseDB.basis = url;
+  const r = await FirebaseDB.lies("spiele/TESTXY/spiel");
+  FirebaseDB.basis = alt;
+  if (!r.ok) {
+    return { ok: false, text: r.status === 401 || r.status === 403 ? "❌ Zugriff verweigert. Sind die Regeln aus firebase/regeln.json eingespielt – mit «voltage» als oberstem Pfad?"
+      : r.status === 404 ? "❌ Datenbank nicht gefunden – stimmt die Adresse?" : "❌ Keine Verbindung. Stimmt die Adresse, und ist das Gerät online?" };
+  }
+  let wurzel = 0;
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const uhr = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+  try {
+    const a = await fetch(`${String(url).replace(/\/+$/, "")}/.json?shallow=true`, { cache: "no-store", signal: ctrl ? ctrl.signal : undefined });
+    wurzel = a.status;
+  } catch (e) { wurzel = 0; }   // Netzfehler bei der Gegenprobe: nicht als offen werten
+  if (uhr) clearTimeout(uhr);
+  if (wurzel >= 200 && wurzel < 300) return { ok: false, text: "⚠️ Die ganze Datenbank ist für alle lesbar – die Regeln aus firebase/regeln.json sind nicht aktiv. Bitte im Tab «Regeln» einfügen und «Veröffentlichen»." };
+  return { ok: true, text: "✅ Verbindung klappt, die Regeln greifen." };
 }
 // Jede Sitzung merkt sich ihre Datenbank – ein späterer Link ändert sie nicht
 function datenbankFuer(modus, db) {
@@ -1831,7 +1852,7 @@ async function spielErstellen(werte) {
   for (let i = 0; i < 6 && !code; i++) {
     const kandidat = werte.code || neuerCode();
     const r = await S.lies(`spiele/${kandidat}/spiel`);
-    if (!r.ok) return { fehler: "Keine Verbindung zur Datenbank." };
+    if (!r.ok) return { fehler: modus === "online" ? "Keine Verbindung zur Online-Datenbank. Prüft das WLAN – oder wählt «📱 Ein Gerät»." : "Speichern auf diesem Gerät nicht möglich." };
     if (r.daten == null) code = kandidat;
     if (werte.code && !code) return { fehler: "Diesen Spielcode gibt es schon." };
   }
@@ -2650,7 +2671,11 @@ function ansichtEinrichten() {
       <p>Im Online-Modus spielt jede Gruppe auf ihrem eigenen Gerät. Die Daten liegen in einer <b>Firebase Realtime Database</b>, die ihr kostenlos selbst anlegt. Die Schritte stehen im README des Projekts (Abschnitt «Online-Modus einrichten»).</p>
       <p class="hinweis achtung klein">Alles, was im Spiel gespeichert wird, kann technisch jede Person lesen, die Spielcode und Datenbank-Adresse kennt. Darum: Firmennamen statt echter Namen, keine Noten, Daten nach der Einheit löschen.</p>
     </section>
-    ${ausKonfig ? `<div class="hinweis gut">✅ Die Datenbank ist fest in der App eingetragen: <span class="zahl klein">${esc(KONFIG.firebaseUrl)}</span></div>` : `
+    ${ausKonfig ? `<section class="karte stapel">
+      <div class="hinweis gut">✅ Die Datenbank ist fest in der App eingetragen: <span class="zahl klein" style="overflow-wrap:anywhere">${esc(KONFIG.firebaseUrl)}</span></div>
+      <div><button class="knopf" type="button" data-act="verbindungTesten"><span>Verbindung testen</span></button></div>
+      <p id="fb-test" class="klein" aria-live="polite"></p>
+    </section>` : `
     <form class="karte stapel" data-form="einrichten" autocomplete="off">
       <label class="feld"><span class="t">Adresse der Datenbank</span>
         <input type="url" id="fb-url" name="url" value="${esc(Lokal.lies("voltage:firebaseUrl", ""))}" placeholder="https://…-default-rtdb.europe-west1.firebasedatabase.app" required>
@@ -3432,6 +3457,12 @@ const AKTIONEN = {
   demo: () => demoStarten(),
   lehrerNeu() { App.bildschirm = "lehrerNeu"; zeichne(); window.scrollTo(0, 0); },
   einrichten() { App.bildschirm = "einrichten"; zeichne(); window.scrollTo(0, 0); },
+  async verbindungTesten() {
+    const out = $("#fb-test");
+    if (out) out.textContent = "⏳ Teste die Verbindung …";
+    const r = await datenbankPruefen(onlineAdresse());
+    if (out && out.isConnected) out.textContent = r.text;
+  },
   onlineAus() { Lokal.loesche("voltage:firebaseUrl"); Sitzungsspeicher.loesche("voltage:dbLink"); FirebaseDB.basis = onlineAdresse(); toast("Online-Modus ausgeschaltet"); zeichne(); },
   lehrerWahl(el) { App.entwurf.lehrerWahl = { code: el.dataset.code, modus: el.dataset.modus === "online" ? "online" : "lokal", db: gueltigeDbUrl(el.dataset.db) ? el.dataset.db : "" }; zeichne(); const p = $("#ll-pin"); if (p) p.focus(); },
   async weiterAls() { const l = letzteGruppe(); if (!l) { zeichne(); return; } await gruppeOeffnen(l.code, l.modus, l.fid, l.db, l); },
@@ -3632,20 +3663,14 @@ const FORMULARE = {
     const out = $("#fb-test");
     if (!gueltigeDbUrl(url)) { out.textContent = "❌ Das ist keine gültige Firebase-Adresse (endet auf firebasedatabase.app oder firebaseio.com)."; return; }
     out.textContent = "⏳ Teste die Verbindung …";
-    const alt = FirebaseDB.basis;
-    FirebaseDB.basis = url;
-    const r = await FirebaseDB.lies("spiele/TESTXY/spiel");
-    if (r.ok) {
-      Lokal.schreib("voltage:firebaseUrl", url);
-      Sitzungsspeicher.loesche("voltage:dbLink");
-      out.textContent = "✅ Verbindung klappt. Der Online-Modus ist eingerichtet.";
-      toast("🌐 Online-Modus eingerichtet");
-      setTimeout(() => { App.bildschirm = "lehrerStart"; zeichne(); }, 1200);
-    } else {
-      FirebaseDB.basis = alt;
-      out.textContent = r.status === 401 || r.status === 403 ? "❌ Zugriff verweigert. Sind die Regeln aus firebase/regeln.json eingespielt – mit «voltage» als oberstem Pfad?"
-        : r.status === 404 ? "❌ Datenbank nicht gefunden – stimmt die Adresse?" : "❌ Keine Verbindung. Stimmt die Adresse, und ist das Gerät online?";
-    }
+    const r = await datenbankPruefen(url);
+    if (!r.ok) { out.textContent = r.text; return; }
+    Lokal.schreib("voltage:firebaseUrl", url);
+    Sitzungsspeicher.loesche("voltage:dbLink");
+    FirebaseDB.basis = onlineAdresse();
+    out.textContent = r.text + " Der Online-Modus ist eingerichtet.";
+    toast("🌐 Online-Modus eingerichtet");
+    setTimeout(() => { App.bildschirm = "lehrerStart"; zeichne(); }, 1200);
   },
   entscheid() { /* Abgabe läuft über den Knopf */ },
   async reflexion(f) { await reflexionSpeichern(f.dataset.teil, f); }
